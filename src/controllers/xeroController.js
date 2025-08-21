@@ -1,3 +1,4 @@
+
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const XeroConnection = require('../models/XeroConnection');
@@ -55,21 +56,20 @@ const handleXeroCallback = async (req, res) => {
   try {
     const { code, error, state } = req.query;
 
+    // FIXED: Update frontend URL to dashboard subdomain
+    const frontendUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://dashboard.zeusapp.co'  // ✅ Fixed to dashboard subdomain
+      : 'http://localhost:5173';
+
     // Handle Xero errors
     if (error) {
       logger.error('Xero OAuth error:', error);
-      const frontendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://zeusapp.co'
-        : 'http://localhost:5173';
       return res.redirect(`${frontendUrl}/xero/callback?xero=error&message=${encodeURIComponent(error)}`);
     }
 
     // Check for authorization code
     if (!code) {
       logger.error('No authorization code received from Xero');
-      const frontendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://zeusapp.co'
-        : 'http://localhost:5173';
       return res.redirect(`${frontendUrl}/xero/callback?xero=error&message=Missing+authorization+code`);
     }
 
@@ -110,9 +110,6 @@ const handleXeroCallback = async (req, res) => {
 
     if (!tenantsResponse.data || tenantsResponse.data.length === 0) {
       logger.error('No Xero organizations found');
-      const frontendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://zeusapp.co'
-        : 'http://localhost:5173';
       return res.redirect(`${frontendUrl}/xero/callback?xero=error&message=No+Xero+organization+found`);
     }
 
@@ -136,17 +133,13 @@ const handleXeroCallback = async (req, res) => {
 
     logger.info(`Xero connection saved successfully for user: ${userId}`);
 
-    const frontendUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://zeusapp.co'
-      : 'http://localhost:5173';
-
     res.redirect(`${frontendUrl}/xero/callback?xero=success`);
   
   } catch (error) {
     logger.error('Xero callback error:', error.response?.data || error.message);
     
     const frontendUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://zeusapp.co'
+      ? 'https://dashboard.zeusapp.co'  // ✅ Fixed to dashboard subdomain
       : 'http://localhost:5173';
 
     res.redirect(`${frontendUrl}/xero/callback?xero=error&message=Connection+failed`);
