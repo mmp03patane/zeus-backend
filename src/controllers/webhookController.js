@@ -10,11 +10,26 @@ const handleXeroWebhook = async (req, res) => {
     console.log('📞 Xero webhook received:', JSON.stringify(req.body, null, 2));
     console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
 
-    // Move the definition of 'events' to the top of the function
     const { events } = req.body;
+    const signature = req.headers['x-xero-signature'];
+    
+    // Get webhook key from environment variables
+    const webhookKey = process.env.XERO_WEBHOOK_KEY;
+    
+    if (!webhookKey) {
+      console.error('❌ XERO_WEBHOOK_KEY not configured');
+      return res.status(500).json({ error: 'Webhook key not configured' });
+    }
 
-    // TEMPORARY: Skip ALL signature verification for now
-    console.log('🔐 TEMPORARY: Skipping signature verification');
+    // VERIFY SIGNATURE FIRST (required for all requests including verification)
+    const isValidSignature = verifyXeroSignature(req.body, signature, webhookKey);
+    
+    if (!isValidSignature) {
+      console.log('❌ Invalid signature - returning 401');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    
+    console.log('✅ Signature verified successfully');
 
     // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
     if (!events || events.length === 0) {
@@ -25,16 +40,6 @@ const handleXeroWebhook = async (req, res) => {
         timestamp: new Date().toISOString()
       });
     }
-    
-    // Original code continues here...
-    
-    // Note: The second check for events is now redundant since we've already handled
-    // the case where events is null or empty.
-    
-    // if (!events || events.length === 0) {
-    //   console.log('📭 No events to process');
-    //   return res.status(200).json({ message: 'No events to process' });
-    // }
 
     console.log(`📦 Processing ${events.length} event(s)`);
 
@@ -88,6 +93,41 @@ const handleXeroWebhook = async (req, res) => {
   }
 };
 
+// Function to verify Xero webhook signature
+const verifyXeroSignature = (payload, signature, webhookKey) => {
+  try {
+    if (!signature || !webhookKey) {
+      console.log('❌ Missing signature or webhook key');
+      return false;
+    }
+
+    // Create the expected signature
+    const payloadString = JSON.stringify(payload);
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookKey)
+      .update(payloadString, 'utf8')
+      .digest('base64');
+
+    console.log('🔐 Signature verification:');
+    console.log('   Received:', signature);
+    console.log('   Expected:', expectedSignature);
+
+    // Compare signatures using crypto.timingSafeEqual to prevent timing attacks
+    const receivedBuffer = Buffer.from(signature, 'base64');
+    const expectedBuffer = Buffer.from(expectedSignature, 'base64');
+
+    if (receivedBuffer.length !== expectedBuffer.length) {
+      console.log('❌ Signature length mismatch');
+      return false;
+    }
+
+    return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+  } catch (error) {
+    console.error('❌ Error verifying signature:', error);
+    return false;
+  }
+};
+
 const processInvoiceUpdate = async (user, connection, invoiceId) => {
   try {
     console.log(`🔍 Fetching invoice details for: ${invoiceId}`);
@@ -136,7 +176,7 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
           customerName,
           user.businessName || 'this business',
           user.googleReviewUrl,
-          user._id  // 👈 ADD THIS - the userId parameter for custom SMS template
+          user._id  // 👈 ADD THIS - the userId parameter for custom SMS template
         );
 
         console.log('✅ SMS sent successfully:', smsResult.sid);
