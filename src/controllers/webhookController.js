@@ -3,23 +3,64 @@ const User = require('../models/User');
 const XeroConnection = require('../models/XeroConnection');
 const ReviewRequest = require('../models/ReviewRequest');
 const { getValidXeroConnection } = require('../services/xeroTokenService');
+const crypto = require('crypto');
 
 const handleXeroWebhook = async (req, res) => {
   try {
     console.log('📞 Xero webhook received:', JSON.stringify(req.body, null, 2));
+    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+
+    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
+    // When Xero first sets up the webhook, it sends a verification request
+    if (req.headers['x-xero-delivery-id'] && !req.headers['x-xero-signature']) {
+      console.log('🔐 Xero webhook verification request detected');
+      // For verification, just return 200 OK
+      return res.status(200).json({ 
+        message: 'Webhook endpoint verified successfully',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // HANDLE WEBHOOK SIGNATURE VERIFICATION (for real events)
+    if (req.headers['x-xero-signature']) {
+      const signature = req.headers['x-xero-signature'];
+      const webhookKey = process.env.XERO_WEBHOOK_KEY;
+      
+      if (webhookKey) {
+        const payloadBody = JSON.stringify(req.body);
+        const expectedSignature = crypto
+          .createHmac('sha256', webhookKey)
+          .update(payloadBody)
+          .digest('base64');
+        
+        if (signature !== expectedSignature) {
+          console.log('❌ Webhook signature verification failed');
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+        
+        console.log('✅ Webhook signature verified');
+      }
+    }
 
     const { events } = req.body;
     
     if (!events || events.length === 0) {
+      console.log('📭 No events to process');
       return res.status(200).json({ message: 'No events to process' });
     }
 
+    console.log(`📦 Processing ${events.length} event(s)`);
+
     for (const event of events) {
+      console.log(`🔍 Processing event: ${event.eventCategory} - ${event.eventType}`);
+      
       // We only care about invoice updates
       if (event.eventCategory === 'INVOICE' && event.eventType === 'UPDATE') {
         
         const tenantId = event.tenantId;
         const resourceId = event.resourceId; // This is the invoice ID
+        
+        console.log(`📋 Processing invoice update for tenant: ${tenantId}, invoice: ${resourceId}`);
         
         // Find the connection by tenant ID first
         const connection = await XeroConnection.findOne({ 
@@ -32,6 +73,8 @@ const handleXeroWebhook = async (req, res) => {
           continue;
         }
         
+        console.log('✅ Found active connection for tenant');
+        
         // Find the user and get valid Xero connection
         const user = await User.findById(connection.userId);
         const validConnection = await getValidXeroConnection(connection.userId);
@@ -41,8 +84,12 @@ const handleXeroWebhook = async (req, res) => {
           continue;
         }
 
+        console.log(`✅ Found user: ${user.businessName || user.email}`);
+
         // Get the updated invoice details from Xero
         await processInvoiceUpdate(user, validConnection, resourceId);
+      } else {
+        console.log(`⏭️ Skipping event: ${event.eventCategory} - ${event.eventType}`);
       }
     }
 
