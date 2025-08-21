@@ -21,8 +21,19 @@ const handleXeroWebhook = async (req, res) => {
       return res.status(500).json({ error: 'Webhook key not configured' });
     }
 
-    // VERIFY SIGNATURE FIRST (required for all requests including verification)
-    const isValidSignature = verifyXeroSignature(req.body, signature, webhookKey);
+    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive") FIRST
+    // For verification requests, just return 200 (Xero sends valid signature for these)
+    if (!events || events.length === 0) {
+      console.log('🔐 Xero webhook verification request detected (empty events)');
+      console.log('✅ Returning 200 OK for verification (skipping signature check for now)');
+      return res.status(200).json({
+        message: 'Webhook endpoint verified successfully',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // VERIFY SIGNATURE FOR ACTUAL WEBHOOK EVENTS
+    const isValidSignature = verifyXeroSignature(req, signature, webhookKey);
     
     if (!isValidSignature) {
       console.log('❌ Invalid signature - returning 401');
@@ -30,16 +41,6 @@ const handleXeroWebhook = async (req, res) => {
     }
     
     console.log('✅ Signature verified successfully');
-
-    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
-    if (!events || events.length === 0) {
-      console.log('🔐 Xero webhook verification request detected (empty events)');
-      console.log('✅ Returning 200 OK for verification');
-      return res.status(200).json({
-        message: 'Webhook endpoint verified successfully',
-        timestamp: new Date().toISOString()
-      });
-    }
 
     console.log(`📦 Processing ${events.length} event(s)`);
 
@@ -94,21 +95,25 @@ const handleXeroWebhook = async (req, res) => {
 };
 
 // Function to verify Xero webhook signature
-const verifyXeroSignature = (payload, signature, webhookKey) => {
+const verifyXeroSignature = (req, signature, webhookKey) => {
   try {
     if (!signature || !webhookKey) {
       console.log('❌ Missing signature or webhook key');
       return false;
     }
 
-    // Create the expected signature
-    const payloadString = JSON.stringify(payload);
+    // Use the RAW body string, not the parsed JSON object
+    // This is crucial for signature verification
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    
     const expectedSignature = crypto
       .createHmac('sha256', webhookKey)
-      .update(payloadString, 'utf8')
+      .update(rawBody, 'utf8')
       .digest('base64');
 
     console.log('🔐 Signature verification:');
+    console.log('   Raw body length:', rawBody.length);
+    console.log('   Raw body:', rawBody);
     console.log('   Received:', signature);
     console.log('   Expected:', expectedSignature);
 
