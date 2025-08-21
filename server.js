@@ -37,6 +37,13 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Raw body capture for Xero webhooks (must be BEFORE express.json())
+app.use('/api/webhook/xero', express.raw({ type: 'application/json' }), (req, res, next) => {
+  req.rawBody = req.body.toString('utf8');
+  req.body = JSON.parse(req.rawBody);
+  next();
+});
+
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

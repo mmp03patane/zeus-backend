@@ -21,18 +21,7 @@ const handleXeroWebhook = async (req, res) => {
       return res.status(500).json({ error: 'Webhook key not configured' });
     }
 
-    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive") FIRST
-    // For verification requests, just return 200 (Xero sends valid signature for these)
-    if (!events || events.length === 0) {
-      console.log('🔐 Xero webhook verification request detected (empty events)');
-      console.log('✅ Returning 200 OK for verification (skipping signature check for now)');
-      return res.status(200).json({
-        message: 'Webhook endpoint verified successfully',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // VERIFY SIGNATURE FOR ACTUAL WEBHOOK EVENTS
+    // VERIFY SIGNATURE FIRST (required for all requests)
     const isValidSignature = verifyXeroSignature(req, signature, webhookKey);
     
     if (!isValidSignature) {
@@ -41,6 +30,16 @@ const handleXeroWebhook = async (req, res) => {
     }
     
     console.log('✅ Signature verified successfully');
+
+    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
+    if (!events || events.length === 0) {
+      console.log('🔐 Xero webhook verification request detected (empty events)');
+      console.log('✅ Returning 200 OK for verification');
+      return res.status(200).json({
+        message: 'Webhook endpoint verified successfully',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     console.log(`📦 Processing ${events.length} event(s)`);
 
