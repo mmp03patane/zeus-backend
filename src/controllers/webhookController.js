@@ -4,6 +4,7 @@ const XeroConnection = require('../models/XeroConnection');
 const ReviewRequest = require('../models/ReviewRequest');
 const { getValidXeroConnection } = require('../services/xeroTokenService');
 const crypto = require('crypto');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const handleXeroWebhook = async (req, res) => {
   try {
@@ -92,6 +93,94 @@ const handleXeroWebhook = async (req, res) => {
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 };
+
+// NEW: Stripe webhook handler
+const handleStripeWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  let event;
+
+  try {
+    // Verify the webhook signature
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log('✅ Stripe webhook signature verified:', event.type);
+  } catch (err) {
+    console.error('❌ Stripe webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        console.log('💰 Stripe checkout session completed:', session.id);
+        await handleSuccessfulPayment(session);
+        break;
+      
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        console.log('✅ Stripe payment succeeded:', paymentIntent.id);
+        break;
+      
+      case 'payment_intent.payment_failed':
+        const failedPayment = event.data.object;
+        console.log('❌ Stripe payment failed:', failedPayment.id);
+        break;
+      
+      default:
+        console.log(`⏭️ Unhandled Stripe event type: ${event.type}`);
+    }
+
+    res.json({received: true});
+  } catch (error) {
+    console.error('❌ Stripe webhook handler error:', error);
+    res.status(500).json({error: 'Webhook handler failed'});
+  }
+};
+
+// Function to handle successful Stripe payments
+async function handleSuccessfulPayment(session) {
+  try {
+    const { metadata, amount_total } = session;
+    
+    // 🔧 FIX: Use correct metadata key names
+    const userId = metadata.userId;  // Changed from metadata.user_id
+    const smsCredits = parseInt(metadata.smsCredits) || 0;  // Changed from smsCount
+    const creditAmount = parseFloat(metadata.creditAmount) || 0;  // Use creditAmount from metadata
+    const dollarAmount = amount_total / 100; // Convert cents to dollars
+
+    console.log(`💰 Processing successful payment: ${dollarAmount} for user ${userId}`);
+    console.log(`🔍 Metadata debug:`, JSON.stringify(metadata, null, 2));
+
+    // Validate userId exists
+    if (!userId) {
+      throw new Error('No userId found in metadata');
+    }
+
+    // Update user's SMS balance in your database
+    const updatedUser = await User.findByIdAndUpdate(
+      userId, 
+      {
+        $inc: { 
+          smsBalance: dollarAmount,
+        }
+      },
+      { new: true }
+    );
+    
+    if (!updatedUser) {
+      throw new Error(`User not found: ${userId}`);
+    }
+
+    console.log(`✅ Successfully added ${dollarAmount} (${smsCredits} SMS credits) to user ${userId}`);
+    console.log(`📊 User's new SMS balance: ${updatedUser.smsBalance}`);
+    
+  } catch (error) {
+    console.error('❌ Error handling successful payment:', error);
+    throw error;
+  }
+}
 
 // Function to verify Xero webhook signature
 const verifyXeroSignature = (req, signature, webhookKey) => {
@@ -338,5 +427,6 @@ const formatPhoneNumber = (phoneNumber) => {
 };
 
 module.exports = {
-  handleXeroWebhook
+  handleXeroWebhook,
+  handleStripeWebhook  // NEW: Export the Stripe webhook handler
 };

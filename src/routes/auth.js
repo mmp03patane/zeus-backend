@@ -4,10 +4,24 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const passport = require('../config/passport'); // Import our passport config
 const User = require('../models/User');
-const { register, login, updateProfile, googleAuth, getCurrentUser } = require('../controllers/authController');
+const { register, login, updateProfile, googleAuth, getCurrentUser, generateToken } = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const router = express.Router();
+
+// In-memory store to track active Google auth sessions
+const activeGoogleAuthSessions = new Map();
+
+// Clean up old auth sessions every 30 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of activeGoogleAuthSessions.entries()) {
+    if (now - timestamp > 30000) { // Remove entries older than 30 seconds
+      activeGoogleAuthSessions.delete(key);
+    }
+  }
+}, 30000);
 
 // Registration validation
 const registerValidation = [
@@ -34,10 +48,114 @@ router.get('/google',
   })
 );
 
+// Google callback with deduplication
 router.get('/google/callback',
   passport.authenticate('google', { session: false }),
+  (req, res, next) => {
+    // Deduplication middleware
+    const userId = req.user?.googleId || req.user?.id;
+    const now = Date.now();
+    
+    if (!userId) {
+      console.log('No user ID found in request, proceeding...');
+      return next();
+    }
+    
+    // Check if we've processed this user recently (within 5 seconds)
+    if (activeGoogleAuthSessions.has(userId)) {
+      const lastAuth = activeGoogleAuthSessions.get(userId);
+      const timeDiff = now - lastAuth;
+      
+      if (timeDiff < 5000) {
+        console.log(`=== DUPLICATE GOOGLE AUTH BLOCKED ===`);
+        console.log(`User: ${userId}`);
+        console.log(`Time since last auth: ${timeDiff}ms`);
+        console.log(`Blocking duplicate request`);
+        
+        return res.status(429).json({ 
+          error: 'Authentication request too recent. Please wait a moment.',
+          retryAfter: Math.ceil((5000 - timeDiff) / 1000)
+        });
+      }
+    }
+    
+    // Record this auth attempt
+    activeGoogleAuthSessions.set(userId, now);
+    console.log(`=== GOOGLE AUTH SESSION TRACKED ===`);
+    console.log(`User: ${userId}`);
+    console.log(`Timestamp: ${now}`);
+    console.log(`Active sessions: ${activeGoogleAuthSessions.size}`);
+    
+    // Continue to googleAuth controller
+    next();
+  },
   googleAuth
 );
+
+// NEW: Payment verification endpoint
+router.get('/verify-payment-session/:sessionId', authMiddleware, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    console.log('🔍 Verifying payment session:', sessionId, 'for user:', req.user.email);
+    
+    // Retrieve the session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    console.log('💳 Stripe session retrieved:', {
+      id: session.id,
+      status: session.payment_status,
+      customer_email: session.customer_details?.email
+    });
+    
+    // Verify this session belongs to the authenticated user
+    const sessionEmail = session.customer_details?.email;
+    const userEmail = req.user.email;
+    
+    if (sessionEmail !== userEmail) {
+      console.log('❌ Email mismatch:', { sessionEmail, userEmail });
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Payment session does not belong to current user' 
+      });
+    }
+    
+    // Check payment was successful
+    if (session.payment_status !== 'paid') {
+      console.log('❌ Payment not completed:', session.payment_status);
+      return res.status(400).json({
+        success: false,
+        message: 'Payment not completed'
+      });
+    }
+    
+    // Generate a fresh token
+    const token = generateToken(req.user._id);
+    console.log('✅ Fresh token generated for user:', req.user.email);
+    
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: req.user._id,
+        email: req.user.email,
+        name: req.user.name,
+        smsBalance: req.user.smsBalance
+      },
+      paymentDetails: {
+        sessionId: session.id,
+        amountPaid: session.amount_total / 100, // Convert from cents
+        currency: session.currency
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Payment session verification error:', error);
+    res.status(400).json({ 
+      success: false, 
+      message: 'Failed to verify payment session',
+      error: error.message 
+    });
+  }
+});
 
 // Complete registration route (MOVED BEFORE module.exports)
 router.post('/complete-registration', async (req, res) => {

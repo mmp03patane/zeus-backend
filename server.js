@@ -18,6 +18,14 @@ const webhookRoutes = require('./src/routes/webhook');
 const googlePlacesRoutes = require('./src/routes/googlePlaces');
 const reviewRequestRoutes = require('./src/routes/reviewRequests');
 const smsRoutes = require('./src/routes/sms');
+// NEW: Import Stripe routes
+const stripeRoutes = require('./src/routes/stripe');
+
+// NEW: Import Stripe webhook handler
+const { handleStripeWebhook } = require('./src/controllers/webhookController');
+
+// NEW: Import Google Token Service
+const googleTokenService = require('./src/services/googleTokenService');
 
 const app = express();
 
@@ -43,6 +51,9 @@ app.use('/api/webhook/xero', express.raw({ type: 'application/json' }), (req, re
   req.body = JSON.parse(req.rawBody);
   next();
 });
+
+// NEW: Raw body capture for Stripe webhooks (must be BEFORE express.json())
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
@@ -73,6 +84,8 @@ app.use('/api/webhook', webhookRoutes);
 app.use('/api/google-places', googlePlacesRoutes);
 app.use('/api/review-requests', reviewRequestRoutes);
 app.use('/api/sms', smsRoutes);
+// NEW: Stripe routes
+app.use('/api/stripe', stripeRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -97,6 +110,9 @@ app.use('*', (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
+  
+  // NEW: Start Google token refresh scheduler after server starts
+  googleTokenService.startTokenRefreshScheduler();
 });
 
 module.exports = app;

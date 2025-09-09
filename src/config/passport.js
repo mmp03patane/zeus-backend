@@ -14,24 +14,39 @@ console.log('Google Redirect URI:', process.env.GOOGLE_REDIRECT_URI ? 'Set' : 'N
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.GOOGLE_REDIRECT_URI
+  callbackURL: process.env.GOOGLE_REDIRECT_URI,
+  accessType: 'offline', // CRITICAL: This ensures we get refresh tokens
+  prompt: 'consent'      // CRITICAL: This forces consent to get refresh tokens
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    console.log('Google OAuth callback - Profile received:', {
-      id: profile.id,
-      name: profile.displayName,
-      email: profile.emails?.[0]?.value
-    });
+    console.log('=== Google OAuth Token Debug ===');
+    console.log('Access Token:', accessToken ? 'RECEIVED' : 'MISSING');
+    console.log('Refresh Token:', refreshToken ? 'RECEIVED' : 'MISSING');
+    console.log('Profile ID:', profile.id);
+    console.log('Profile Email:', profile.emails?.[0]?.value);
 
-    // Create user object that matches your authController expectations
+    // Calculate token expiry (Google access tokens last 1 hour)
+    const tokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour from now
+
+    // Create user object that includes the OAuth tokens
     const userInfo = {
       googleId: profile.id,
       name: profile.displayName,
       email: profile.emails?.[0]?.value,
-      profilePicture: profile.photos?.[0]?.value
+      profilePicture: profile.photos?.[0]?.value,
+      // CRITICAL: Include the OAuth tokens
+      googleAccessToken: accessToken,
+      googleRefreshToken: refreshToken,
+      googleTokenExpiry: tokenExpiry
     };
 
-    // Pass the user info to the callback - don't save here, let authController handle it
+    console.log('Passing tokens to authController:', {
+      hasAccessToken: !!userInfo.googleAccessToken,
+      hasRefreshToken: !!userInfo.googleRefreshToken,
+      tokenExpiry: userInfo.googleTokenExpiry
+    });
+
+    // Pass the complete user info including tokens to authController
     done(null, userInfo);
     
   } catch (error) {

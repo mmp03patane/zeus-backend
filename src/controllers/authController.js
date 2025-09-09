@@ -175,8 +175,25 @@ const googleAuth = async (req, res) => {
     console.log('=== Google Auth Controller ===');
     console.log('req.user:', req.user);
     
-    const { googleId, email, name, profilePicture } = req.user;
-    console.log('Extracted data:', { googleId, email, name, profilePicture });
+    const { 
+      googleId, 
+      email, 
+      name, 
+      profilePicture, 
+      googleAccessToken, 
+      googleRefreshToken, 
+      googleTokenExpiry 
+    } = req.user;
+    
+    console.log('Extracted data:', { 
+      googleId, 
+      email, 
+      name, 
+      profilePicture,
+      hasAccessToken: !!googleAccessToken,
+      hasRefreshToken: !!googleRefreshToken,
+      tokenExpiry: googleTokenExpiry
+    });
 
     // Check if user already exists
     let user = await User.findOne({ 
@@ -188,7 +205,8 @@ const googleAuth = async (req, res) => {
     console.log('Found existing user:', user ? 'YES' : 'NO');
 
     if (user) {
-      console.log('Existing user found, updating Google info if needed');
+      console.log('Existing user found, updating Google info and tokens');
+      
       // Update Google info if user exists but doesn't have googleId
       if (!user.googleId) {
         user.googleId = googleId;
@@ -199,26 +217,41 @@ const googleAuth = async (req, res) => {
         } else if (!user.authProvider) {
           user.authProvider = 'google';
         }
-        await user.save();
-        console.log('Updated existing user with Google info');
       }
+
+      // CRITICAL: Always update the OAuth tokens
+      user.googleAccessToken = googleAccessToken;
+      if (googleRefreshToken) {
+        user.googleRefreshToken = googleRefreshToken;
+      }
+      user.googleTokenExpiry = googleTokenExpiry;
+
+      await user.save();
+      console.log('Updated existing user with Google tokens');
+      
     } else {
-      console.log('Creating new user');
-      // Create new user
+      console.log('Creating new user with Google tokens');
+      
+      // Create new user with OAuth tokens
       user = new User({
         name: name.trim(),
         email: email.toLowerCase().trim(),
         googleId,
         profilePicture,
         authProvider: 'google',
-        isOnboardingComplete: false
+        isOnboardingComplete: false,
+        // CRITICAL: Store the OAuth tokens
+        googleAccessToken,
+        googleRefreshToken,
+        googleTokenExpiry
       });
+      
       await user.save();
-      console.log('New user created:', user._id);
+      console.log('New user created with Google tokens:', user._id);
     }
 
     const token = generateToken(user._id);
-    console.log('Token generated:', token ? 'SUCCESS' : 'FAILED');
+    console.log('JWT token generated:', token ? 'SUCCESS' : 'FAILED');
 
     // Redirect to frontend with token
     const frontendURL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -321,5 +354,6 @@ module.exports = {
   login,
   googleAuth,
   getCurrentUser,
-  updateProfile
+  updateProfile,
+  generateToken
 };

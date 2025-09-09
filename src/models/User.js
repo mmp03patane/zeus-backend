@@ -33,6 +33,19 @@ const userSchema = new mongoose.Schema({
     enum: ['email', 'google'],
     default: 'email'
   },
+  // NEW: Google OAuth Token fields
+  googleAccessToken: {
+    type: String,
+    default: null
+  },
+  googleRefreshToken: {
+    type: String,
+    default: null
+  },
+  googleTokenExpiry: {
+    type: Date,
+    default: null
+  },
   googlePlaceId: {
     type: String,
     default: null
@@ -70,6 +83,17 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // NEW: SMS Balance fields
+  smsBalance: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalSMSCredits: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   smsTemplate: {
     message: {
       type: String,
@@ -83,7 +107,7 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }, // Added missing comma here
+  },
   updatedAt: {
     type: Date,
     default: Date.now
@@ -94,6 +118,44 @@ userSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// NEW: Method to calculate available SMS messages
+userSchema.methods.getAvailableSMS = function() {
+  return Math.floor(this.smsBalance / 0.25);
+};
+
+// NEW: Method to deduct SMS cost
+userSchema.methods.deductSMSCost = async function() {
+  if (this.smsBalance >= 0.25) {
+    this.smsBalance -= 0.25;
+    await this.save();
+    return true;
+  }
+  return false;
+};
+
+// NEW: Method to check if user has sufficient SMS balance
+userSchema.methods.hasSufficientSMSBalance = function() {
+  return this.smsBalance >= 0.25;
+};
+
+// NEW: Method to check if Google token needs refresh
+userSchema.methods.needsGoogleTokenRefresh = function() {
+  if (!this.googleTokenExpiry) return false;
+  // Refresh if token expires in less than 5 minutes
+  const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+  return this.googleTokenExpiry <= fiveMinutesFromNow;
+};
+
+// NEW: Method to update Google tokens
+userSchema.methods.updateGoogleTokens = function(accessToken, refreshToken, expiryDate) {
+  this.googleAccessToken = accessToken;
+  if (refreshToken) {
+    this.googleRefreshToken = refreshToken;
+  }
+  this.googleTokenExpiry = expiryDate;
+  return this.save();
+};
 
 // Index for faster queries
 userSchema.index({ email: 1 });
