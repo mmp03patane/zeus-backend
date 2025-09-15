@@ -79,6 +79,19 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // NEW: Account Deactivation fields
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  deactivatedAt: {
+    type: Date,
+    default: null
+  },
+  deactivationReason: {
+    type: String,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -157,10 +170,38 @@ userSchema.methods.updateGoogleTokens = function(accessToken, refreshToken, expi
   return this.save();
 };
 
+// NEW: Method to deactivate user account
+userSchema.methods.deactivateAccount = async function(reason = null) {
+  this.isActive = false;
+  this.deactivatedAt = new Date();
+  this.deactivationReason = reason;
+  // Clear sensitive tokens but keep the data
+  this.googleAccessToken = null;
+  this.googleRefreshToken = null;
+  this.googleTokenExpiry = null;
+  await this.save();
+  return this;
+};
+
+// NEW: Method to reactivate user account
+userSchema.methods.reactivateAccount = async function() {
+  this.isActive = true;
+  this.deactivatedAt = null;
+  this.deactivationReason = null;
+  await this.save();
+  return this;
+};
+
+// NEW: Method to check if account is deactivated
+userSchema.methods.isDeactivated = function() {
+  return !this.isActive;
+};
+
 // Index for faster queries
 userSchema.index({ email: 1 });
 userSchema.index({ firebaseUid: 1 });
 userSchema.index({ googleId: 1 });
+userSchema.index({ isActive: 1 }); // NEW: Index for active status checks
 // REMOVED: googlePlaceId index since it shouldn't be unique
 
 module.exports = mongoose.model('User', userSchema);

@@ -1,5 +1,5 @@
 const express = require('express');
-const { handleXeroWebhook } = require('../controllers/webhookController');
+const { handleXeroWebhook, handleStripeWebhook } = require('../controllers/webhookController'); // ADD handleStripeWebhook import
 const { sendReviewRequestSMS } = require('../services/twilioService');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
@@ -8,6 +8,9 @@ const router = express.Router();
 
 // Xero webhook endpoint (no auth needed - Xero calls this)
 router.post('/xero', handleXeroWebhook);
+
+// ADD THIS: Stripe webhook endpoint (no auth needed - Stripe calls this)
+router.post('/stripe', handleStripeWebhook);
 
 // TEST ENDPOINT - Remove this after testing
 router.get('/test-sms', authMiddleware, async (req, res) => {

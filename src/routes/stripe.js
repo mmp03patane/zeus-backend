@@ -1,11 +1,11 @@
 // routes/stripe.js
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth'); // Changed from { requireAuth }
+const authMiddleware = require('../middleware/auth');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // POST /api/stripe/create-checkout-session
-router.post('/create-checkout-session', auth, async (req, res) => { // Changed from requireAuth
+router.post('/create-checkout-session', authMiddleware, async (req, res) => {
   try {
     const { amount } = req.body; // Simplified - we'll calculate everything here
     
@@ -27,7 +27,7 @@ router.post('/create-checkout-session', auth, async (req, res) => { // Changed f
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
-          currency: 'usd',
+          currency: 'aud',
           product_data: {
             name: `SMS Credits - ${smsCredits} messages`,
             description: `Add $${amount} to your SMS balance (${smsCredits} messages at $0.25 each)`,

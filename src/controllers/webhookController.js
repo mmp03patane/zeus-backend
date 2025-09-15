@@ -6,6 +6,129 @@ const { getValidXeroConnection } = require('../services/xeroTokenService');
 const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// UPDATED processInvoiceUpdate function with SMS balance check
+const processInvoiceUpdate = async (user, connection, invoiceId) => {
+  try {
+    console.log(`🔍 Fetching invoice details for: ${invoiceId}`);
+
+    // Fetch the invoice details from Xero using the valid connection
+    const response = await fetch(`https://api.xero.com/api.xro/2.0/Invoices/${invoiceId}`, {
+      headers: {
+        'Authorization': `Bearer ${connection.accessToken}`,
+        'xero-tenant-id': connection.tenantId,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('❌ Failed to fetch invoice:', response.status, response.statusText);
+      return;
+    }
+
+    const data = await response.json();
+    const invoice = data.Invoices[0];
+
+    console.log(`📋 Invoice Status: ${invoice.Status}, Amount Due: ${invoice.AmountDue}`);
+
+    // Check if invoice is paid (Status = 'PAID' and AmountDue = 0)
+    if (invoice.Status === 'PAID' && invoice.AmountDue === 0) {
+      console.log('💰 Invoice is PAID! Processing review request...');
+
+      // Extract customer phone from invoice
+      let customerPhone = extractPhoneFromInvoice(invoice);
+
+      // FALLBACK: Use test phone number if none found
+      if (!customerPhone) {
+        console.log('📱 No phone found in invoice, using test number...');
+        customerPhone = '+61400803880'; // Your test number
+      }
+
+      if (customerPhone) {
+        console.log(`📱 Sending SMS to: ${customerPhone}`);
+
+        // Extract customer name
+        const customerName = invoice.Contact?.Name || 'Valued Customer';
+
+        let smsStatus = 'failed';
+        let twilioSid = null;
+
+        try {
+          // 🚨 PAYWALL: Send SMS with balance check
+          const smsResult = await sendReviewRequestSMS(
+            customerPhone,
+            customerName,
+            user.businessName || 'this business',
+            user.googleReviewUrl,
+            user._id  // userId parameter for balance check
+          );
+
+          console.log('✅ SMS sent successfully:', smsResult.sid);
+          smsStatus = 'sent';
+          twilioSid = smsResult.sid;
+
+        } catch (smsError) {
+          console.error('❌ SMS sending failed:', smsError.message);
+          
+          // 🚨 PAYWALL: Handle insufficient balance error
+          if (smsError.code === 'INSUFFICIENT_BALANCE') {
+            smsStatus = 'SMS failed - $0 balance, please top up';
+            console.log('💰 SMS blocked due to insufficient balance');
+          } else {
+            smsStatus = 'failed';
+          }
+        }
+
+        // 📊 Log this activity in database for Zeus timeline
+        const reviewRequest = new ReviewRequest({
+          userId: user._id,
+          xeroInvoiceId: invoiceId,
+          invoiceNumber: invoice.InvoiceNumber,
+          customerName: customerName,
+          customerEmail: invoice.Contact?.EmailAddress || '',
+          customerPhone: customerPhone,
+          smsStatus: smsStatus,
+          emailStatus: 'pending',
+          twilioSid: twilioSid,
+          sentAt: smsStatus === 'sent' ? new Date() : null
+        });
+
+        await reviewRequest.save();
+        console.log('📊 Review request logged to database:', reviewRequest._id);
+
+      } else {
+        console.log('❌ No phone number found in invoice');
+      }
+    } else {
+      console.log('⏳ Invoice not fully paid yet, skipping SMS');
+    }
+
+  } catch (error) {
+    console.error('❌ Error processing invoice:', error);
+
+    // 📊 Log failed attempt if we have basic info
+    if (invoiceId && user) {
+      try {
+        const failedRequest = new ReviewRequest({
+          userId: user._id,
+          xeroInvoiceId: invoiceId,
+          invoiceNumber: invoice?.InvoiceNumber || 'Unknown',
+          customerName: 'Unknown Customer',
+          customerEmail: '',
+          customerPhone: null,
+          smsStatus: 'failed',
+          emailStatus: 'pending',
+          sentAt: new Date()
+        });
+
+        await failedRequest.save();
+        console.log('📊 Failed request logged to database');
+      } catch (dbError) {
+        console.error('❌ Failed to log error to database:', dbError);
+      }
+    }
+  }
+};
+
 const handleXeroWebhook = async (req, res) => {
   try {
     console.log('📞 Xero webhook received:', JSON.stringify(req.body, null, 2));
@@ -94,93 +217,59 @@ const handleXeroWebhook = async (req, res) => {
   }
 };
 
-// NEW: Stripe webhook handler
 const handleStripeWebhook = async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  let event;
-
   try {
-    // Verify the webhook signature
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-    console.log('✅ Stripe webhook signature verified:', event.type);
-  } catch (err) {
-    console.error('❌ Stripe webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    const sig = req.headers['stripe-signature'];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  // Handle the event
-  try {
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    console.log('Stripe webhook event received:', event.type);
+
+    // Handle the event
     switch (event.type) {
       case 'checkout.session.completed':
         const session = event.data.object;
-        console.log('💰 Stripe checkout session completed:', session.id);
-        await handleSuccessfulPayment(session);
+        
+        // Get user ID from metadata
+        const userId = session.metadata.userId;
+        const creditAmount = parseFloat(session.metadata.creditAmount);
+        
+        console.log(`Processing payment for user ${userId}: +$${creditAmount}`);
+        
+        // Add the credit to user's balance
+        await User.findByIdAndUpdate(userId, {
+          $inc: { 
+            smsBalance: creditAmount,
+            totalSMSCredits: creditAmount 
+          }
+        });
+        
+        console.log(`Successfully added $${creditAmount} to user ${userId} balance`);
         break;
-      
+        
       case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object;
-        console.log('✅ Stripe payment succeeded:', paymentIntent.id);
+        console.log('PaymentIntent was successful!');
         break;
-      
-      case 'payment_intent.payment_failed':
-        const failedPayment = event.data.object;
-        console.log('❌ Stripe payment failed:', failedPayment.id);
-        break;
-      
+        
       default:
-        console.log(`⏭️ Unhandled Stripe event type: ${event.type}`);
+        console.log(`Unhandled event type ${event.type}`);
     }
 
-    res.json({received: true});
+    res.json({ received: true });
+
   } catch (error) {
-    console.error('❌ Stripe webhook handler error:', error);
-    res.status(500).json({error: 'Webhook handler failed'});
+    console.error('Stripe webhook error:', error);
+    res.status(400).json({ error: error.message });
   }
 };
-
-// Function to handle successful Stripe payments
-async function handleSuccessfulPayment(session) {
-  try {
-    const { metadata, amount_total } = session;
-    
-    // 🔧 FIX: Use correct metadata key names
-    const userId = metadata.userId;  // Changed from metadata.user_id
-    const smsCredits = parseInt(metadata.smsCredits) || 0;  // Changed from smsCount
-    const creditAmount = parseFloat(metadata.creditAmount) || 0;  // Use creditAmount from metadata
-    const dollarAmount = amount_total / 100; // Convert cents to dollars
-
-    console.log(`💰 Processing successful payment: ${dollarAmount} for user ${userId}`);
-    console.log(`🔍 Metadata debug:`, JSON.stringify(metadata, null, 2));
-
-    // Validate userId exists
-    if (!userId) {
-      throw new Error('No userId found in metadata');
-    }
-
-    // Update user's SMS balance in your database
-    const updatedUser = await User.findByIdAndUpdate(
-      userId, 
-      {
-        $inc: { 
-          smsBalance: dollarAmount,
-        }
-      },
-      { new: true }
-    );
-    
-    if (!updatedUser) {
-      throw new Error(`User not found: ${userId}`);
-    }
-
-    console.log(`✅ Successfully added ${dollarAmount} (${smsCredits} SMS credits) to user ${userId}`);
-    console.log(`📊 User's new SMS balance: ${updatedUser.smsBalance}`);
-    
-  } catch (error) {
-    console.error('❌ Error handling successful payment:', error);
-    throw error;
-  }
-}
 
 // Function to verify Xero webhook signature
 const verifyXeroSignature = (req, signature, webhookKey) => {
@@ -191,7 +280,6 @@ const verifyXeroSignature = (req, signature, webhookKey) => {
     }
 
     // Use the RAW body string, not the parsed JSON object
-    // This is crucial for signature verification
     const rawBody = req.rawBody || JSON.stringify(req.body);
     
     const expectedSignature = crypto
@@ -201,7 +289,6 @@ const verifyXeroSignature = (req, signature, webhookKey) => {
 
     console.log('🔐 Signature verification:');
     console.log('   Raw body length:', rawBody.length);
-    console.log('   Raw body:', rawBody);
     console.log('   Received:', signature);
     console.log('   Expected:', expectedSignature);
 
@@ -218,112 +305,6 @@ const verifyXeroSignature = (req, signature, webhookKey) => {
   } catch (error) {
     console.error('❌ Error verifying signature:', error);
     return false;
-  }
-};
-
-const processInvoiceUpdate = async (user, connection, invoiceId) => {
-  try {
-    console.log(`🔍 Fetching invoice details for: ${invoiceId}`);
-
-    // Fetch the invoice details from Xero using the valid connection
-    const response = await fetch(`https://api.xero.com/api.xro/2.0/Invoices/${invoiceId}`, {
-      headers: {
-        'Authorization': `Bearer ${connection.accessToken}`,
-        'xero-tenant-id': connection.tenantId,
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      console.error('❌ Failed to fetch invoice:', response.status, response.statusText);
-      return;
-    }
-
-    const data = await response.json();
-    const invoice = data.Invoices[0];
-
-    console.log(`📋 Invoice Status: ${invoice.Status}, Amount Due: ${invoice.AmountDue}`);
-
-    // Check if invoice is paid (Status = 'PAID' and AmountDue = 0)
-    if (invoice.Status === 'PAID' && invoice.AmountDue === 0) {
-      console.log('💰 Invoice is PAID! Processing review request...');
-
-      // Extract customer phone from invoice
-      let customerPhone = extractPhoneFromInvoice(invoice);
-
-      // FALLBACK: Use test phone number if none found
-      if (!customerPhone) {
-        console.log('📱 No phone found in invoice, using test number...');
-        customerPhone = '+61400803880'; // Your test number
-      }
-
-      if (customerPhone) {
-        console.log(`📱 Sending SMS to: ${customerPhone}`);
-
-        // Extract customer name
-        const customerName = invoice.Contact?.Name || 'Valued Customer';
-
-        // Send the SMS with userId parameter for custom template
-        const smsResult = await sendReviewRequestSMS(
-          customerPhone,
-          customerName,
-          user.businessName || 'this business',
-          user.googleReviewUrl,
-          user._id  // 👈 ADD THIS - the userId parameter for custom SMS template
-        );
-
-        console.log('✅ SMS sent successfully:', smsResult.sid);
-
-        // 📊 Log this activity in database for Zeus timeline
-        const reviewRequest = new ReviewRequest({
-          userId: user._id,
-          xeroInvoiceId: invoiceId,
-          invoiceNumber: invoice.InvoiceNumber,
-          customerName: customerName,
-          customerEmail: invoice.Contact?.EmailAddress || '',
-          customerPhone: customerPhone,
-          smsStatus: 'sent',
-          emailStatus: 'pending', // Set to pending for now
-          twilioSid: smsResult.sid,
-          sentAt: new Date()
-        });
-
-        await reviewRequest.save();
-        console.log('📊 Review request logged to database:', reviewRequest._id);
-
-        // TODO: Implement email sending and update emailStatus
-
-      } else {
-        console.log('❌ No phone number found in invoice');
-      }
-    } else {
-      console.log('⏳ Invoice not fully paid yet, skipping SMS');
-    }
-
-  } catch (error) {
-    console.error('❌ Error processing invoice:', error);
-
-    // 📊 Log failed attempt if we have basic info
-    if (invoiceId && user) {
-      try {
-        const failedRequest = new ReviewRequest({
-          userId: user._id,
-          xeroInvoiceId: invoiceId,
-          invoiceNumber: invoice.InvoiceNumber || 'Unknown',
-          customerName: 'Unknown Customer',
-          customerEmail: '',
-          customerPhone: null,
-          smsStatus: 'failed',
-          emailStatus: 'pending',
-          sentAt: new Date()
-        });
-
-        await failedRequest.save();
-        console.log('📊 Failed request logged to database');
-      } catch (dbError) {
-        console.error('❌ Failed to log error to database:', dbError);
-      }
-    }
   }
 };
 
@@ -428,5 +409,8 @@ const formatPhoneNumber = (phoneNumber) => {
 
 module.exports = {
   handleXeroWebhook,
-  handleStripeWebhook  // NEW: Export the Stripe webhook handler
+  handleStripeWebhook,
+  processInvoiceUpdate,
+  verifyXeroSignature,
+  extractPhoneFromInvoice
 };

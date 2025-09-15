@@ -14,9 +14,7 @@ console.log('Google Redirect URI:', process.env.GOOGLE_REDIRECT_URI ? 'Set' : 'N
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.GOOGLE_REDIRECT_URI,
-  accessType: 'offline', // CRITICAL: This ensures we get refresh tokens
-  prompt: 'consent'      // CRITICAL: This forces consent to get refresh tokens
+  callbackURL: process.env.GOOGLE_REDIRECT_URI
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     console.log('=== Google OAuth Token Debug ===');

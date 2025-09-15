@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const XeroConnection = require('../models/XeroConnection');
 const logger = require('../utils/logger');
 const { validationResult } = require('express-validator');
 
@@ -141,6 +142,17 @@ const login = async (req, res) => {
       });
     }
 
+    // CHECK: If account is deactivated, don't allow login
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is deactivated',
+        isDeactivated: true,
+        deactivatedAt: user.deactivatedAt,
+        canReactivate: true
+      });
+    }
+
     const token = generateToken(user._id);
 
     res.json({
@@ -206,6 +218,14 @@ const googleAuth = async (req, res) => {
 
     if (user) {
       console.log('Existing user found, updating Google info and tokens');
+      
+      // CHECK: If account is deactivated, redirect to reactivation
+      if (!user.isActive) {
+        const frontendURL = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const reactivateUrl = `${frontendURL}/auth/reactivate?email=${encodeURIComponent(user.email)}&deactivated=true`;
+        console.log('User account is deactivated, redirecting to reactivation:', reactivateUrl);
+        return res.redirect(reactivateUrl);
+      }
       
       // Update Google info if user exists but doesn't have googleId
       if (!user.googleId) {
@@ -311,14 +331,24 @@ const getCurrentUser = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { googlePlaceId, businessName, googleReviewUrl } = req.body;
+    const { 
+      googlePlaceId, 
+      businessName, 
+      googleReviewUrl,
+      businessAddress,
+      googleRating,
+      totalReviews 
+    } = req.body;
     
     const user = await User.findByIdAndUpdate(
       req.user._id,
       {
         googlePlaceId,
-        businessName,
+        businessName, // This now comes from Google Places
         googleReviewUrl,
+        businessAddress,
+        googleRating,
+        totalReviews,
         isOnboardingComplete: true
       },
       { new: true }
@@ -349,11 +379,136 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// NEW: Deactivate user account
+const deactivateAccount = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const userId = req.user._id;
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if already deactivated
+    if (!user.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account is already deactivated'
+      });
+    }
+
+    // Deactivate Xero connections (set to inactive)
+    await XeroConnection.updateMany(
+      { userId },
+      { 
+        isActive: false,
+        deactivatedAt: new Date()
+      }
+    );
+
+    // Deactivate user account
+    await user.deactivateAccount(reason);
+
+    logger.info(`User account deactivated: ${user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Account deactivated successfully',
+      data: {
+        deactivatedAt: user.deactivatedAt,
+        canReactivate: true
+      }
+    });
+
+  } catch (error) {
+    logger.error('Account deactivation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Account deactivation failed'
+    });
+  }
+};
+
+// NEW: Reactivate user account
+const reactivateAccount = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is actually deactivated
+    if (user.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account is already active'
+      });
+    }
+
+    // Reactivate user account
+    await user.reactivateAccount();
+
+    // NOTE: Don't automatically reactivate Xero connections
+    // User will need to reconnect Xero manually for security
+
+    // Generate new token
+    const token = generateToken(user._id);
+
+    logger.info(`User account reactivated: ${user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Account reactivated successfully',
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          isOnboardingComplete: user.isOnboardingComplete,
+          businessName: user.businessName,
+          googleReviewUrl: user.googleReviewUrl,
+          profilePicture: user.profilePicture,
+          authProvider: user.authProvider
+        },
+        token,
+        requiresXeroReconnection: true
+      }
+    });
+
+  } catch (error) {
+    logger.error('Account reactivation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Account reactivation failed'
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   googleAuth,
   getCurrentUser,
   updateProfile,
-  generateToken
+  generateToken,
+  deactivateAccount,
+  reactivateAccount
 };

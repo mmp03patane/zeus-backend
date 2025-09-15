@@ -58,6 +58,67 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/xero/health - Check connection health and token status
+router.get('/health', authMiddleware, async (req, res) => {
+  try {
+    const connection = await XeroConnection.findOne({ 
+      userId: req.user._id, 
+      isActive: true 
+    });
+
+    if (!connection) {
+      return res.json({
+        success: true,
+        data: {
+          status: 'disconnected',
+          healthy: false,
+          message: 'No Xero connection found'
+        }
+      });
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(connection.tokenExpiresAt);
+    const timeUntilExpiry = expiresAt - now;
+    const minutesUntilExpiry = Math.floor(timeUntilExpiry / (1000 * 60));
+    
+    let status = 'healthy';
+    let healthy = true;
+    let message = 'Connection is active and tokens are valid';
+    
+    if (timeUntilExpiry <= 0) {
+      status = 'expired';
+      healthy = false;
+      message = 'Access token has expired';
+    } else if (minutesUntilExpiry <= 15) {
+      status = 'expiring_soon';
+      healthy = true;
+      message = `Access token expires in ${minutesUntilExpiry} minutes`;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        status,
+        healthy,
+        message,
+        tenantName: connection.tenantName,
+        connectedAt: connection.createdAt,
+        tokenExpiresAt: connection.tokenExpiresAt,
+        minutesUntilExpiry,
+        lastRefresh: connection.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking Xero health:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to check connection health' 
+    });
+  }
+});
+
 // GET /api/xero/tenants - Get connected Xero organizations
 router.get('/tenants', authMiddleware, async (req, res) => {
   try {

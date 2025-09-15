@@ -9,8 +9,24 @@ const DEFAULT_MESSAGE_TEMPLATE = `Hi {customerName}! Thank you for choosing {bus
 
 const sendReviewRequestSMS = async (phoneNumber, customerName, businessName, reviewUrl, userId = null) => {
   try {
+    // 🚨 PAYWALL CHECK: Verify SMS balance before sending
+    if (userId) {
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      if (user.smsBalance <= 0) {
+        const error = new Error('SMS failed - $0 balance, please top up');
+        error.code = 'INSUFFICIENT_BALANCE';
+        throw error;
+      }
+      
+      logger.info(`SMS balance check passed: $${user.smsBalance} for user: ${userId}`);
+    }
+
     let message;
-    
+
     // If userId is provided, try to get custom template
     if (userId) {
       try {
@@ -21,7 +37,7 @@ const sendReviewRequestSMS = async (phoneNumber, customerName, businessName, rev
             .replace(/{customerName}/g, customerName)
             .replace(/{businessName}/g, businessName)
             .replace(/{reviewUrl}/g, reviewUrl);
-          
+
           logger.info(`Using custom SMS template for user: ${userId}`);
         } else {
           // Fall back to default template with placeholder replacement
@@ -29,7 +45,7 @@ const sendReviewRequestSMS = async (phoneNumber, customerName, businessName, rev
             .replace(/{customerName}/g, customerName)
             .replace(/{businessName}/g, businessName)
             .replace(/{reviewUrl}/g, reviewUrl);
-          
+
           logger.info(`Using default SMS template (custom template not found/disabled for user: ${userId})`);
         }
       } catch (error) {
@@ -51,6 +67,20 @@ const sendReviewRequestSMS = async (phoneNumber, customerName, businessName, rev
       messagingServiceSid: process.env.MESSAGING_SERVICE_SID,
       to: phoneNumber
     });
+
+    // 🚨 DEDUCT SMS CREDIT: Subtract $0.10 from balance after successful send
+    if (userId) {
+      try {
+        await User.findByIdAndUpdate(userId, {
+          $inc: { smsBalance: -0.10 }
+        });
+        logger.info(`Deducted $0.10 from user ${userId} balance`);
+      } catch (deductError) {
+        logger.error('Failed to deduct SMS credit:', deductError);
+        // Note: SMS was sent successfully, but credit wasn't deducted
+        // Consider implementing a retry mechanism or manual adjustment
+      }
+    }
 
     logger.info(`SMS sent successfully: ${result.sid}`);
     return result;

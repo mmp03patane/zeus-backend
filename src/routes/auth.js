@@ -4,8 +4,18 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const passport = require('../config/passport'); // Import our passport config
 const User = require('../models/User');
-const { register, login, updateProfile, googleAuth, getCurrentUser, generateToken } = require('../controllers/authController');
+const { 
+  register, 
+  login, 
+  updateProfile, 
+  googleAuth, 
+  getCurrentUser, 
+  generateToken,
+  deactivateAccount,
+  reactivateAccount 
+} = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
+const { ensureValidTokens } = require('../middleware/tokenRefresh');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const router = express.Router();
@@ -35,16 +45,32 @@ const loginValidation = [
   body('firebaseUid').notEmpty().withMessage('Firebase UID is required')
 ];
 
+// Deactivation validation
+const deactivationValidation = [
+  body('reason').optional().trim().isLength({ max: 500 }).withMessage('Reason must be less than 500 characters')
+];
+
+// Reactivation validation
+const reactivationValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required')
+];
+
 // Existing routes
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.put('/profile', authMiddleware, updateProfile);
 router.get('/me', authMiddleware, getCurrentUser); // Get current user endpoint
 
+// NEW: Account deactivation/reactivation routes
+router.post('/deactivate', authMiddleware, deactivationValidation, deactivateAccount);
+router.post('/reactivate', reactivationValidation, reactivateAccount);
+
 // NEW: Google OAuth routes (these will be /api/auth/google and /api/auth/google/callback)
 router.get('/google', 
   passport.authenticate('google', { 
-    scope: ['profile', 'email'] 
+    scope: ['profile', 'email'],
+    accessType: 'offline',    // ADD THIS
+    prompt: 'consent'         // ADD THIS
   })
 );
 
@@ -92,8 +118,8 @@ router.get('/google/callback',
   googleAuth
 );
 
-// NEW: Payment verification endpoint
-router.get('/verify-payment-session/:sessionId', authMiddleware, async (req, res) => {
+// NEW: Payment verification endpoint - NOW WITH TOKEN REFRESH MIDDLEWARE
+router.get('/verify-payment-session/:sessionId', authMiddleware, ensureValidTokens, async (req, res) => {
   try {
     const { sessionId } = req.params;
     console.log('🔍 Verifying payment session:', sessionId, 'for user:', req.user.email);

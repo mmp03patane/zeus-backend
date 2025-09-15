@@ -1,11 +1,12 @@
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const twilioService = require('../services/twilioService');
 
 // Get user's SMS template
 const getSMSTemplate = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -26,7 +27,7 @@ const getSMSTemplate = async (req, res) => {
 const updateSMSTemplate = async (req, res) => {
   try {
     const { message, isEnabled } = req.body;
-    
+
     // Validate required fields
     if (!message || message.trim().length === 0) {
       return res.status(400).json({ message: 'Message is required' });
@@ -83,7 +84,7 @@ const updateSMSTemplate = async (req, res) => {
 const previewSMSTemplate = async (req, res) => {
   try {
     const { message } = req.body;
-    
+
     if (!message) {
       return res.status(400).json({ message: 'Message is required' });
     }
@@ -113,8 +114,75 @@ const previewSMSTemplate = async (req, res) => {
   }
 };
 
+// NEW: Test SMS endpoint with balance check
+const sendTestSMS = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // PAYWALL CHECK: Verify balance before test SMS
+    if (user.smsBalance <= 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'SMS failed - $0 balance, please top up',
+        balance: user.smsBalance 
+      });
+    }
+
+    if (!user.googleReviewUrl) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No Google review URL configured. Complete onboarding first.' 
+      });
+    }
+
+    const testPhoneNumber = phoneNumber || '+61400803880';
+    
+    const result = await twilioService.sendReviewRequestSMS(
+      testPhoneNumber,
+      'Test Customer',
+      user.businessName,
+      user.googleReviewUrl,
+      user._id  // Include userId for balance check
+    );
+
+    // Fetch updated user to get new balance
+    const updatedUser = await User.findById(req.user.id);
+
+    res.json({
+      success: true,
+      message: 'Test SMS sent successfully!',
+      messageSid: result.sid,
+      phoneNumber: testPhoneNumber,
+      remainingBalance: updatedUser.smsBalance.toFixed(2)
+    });
+
+  } catch (error) {
+    console.error('Test SMS error:', error);
+    
+    if (error.code === 'INSUFFICIENT_BALANCE') {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        balance: 0
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test SMS',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getSMSTemplate,
   updateSMSTemplate,
-  previewSMSTemplate
+  previewSMSTemplate,
+  sendTestSMS  // NEW: Export test SMS function
 };
