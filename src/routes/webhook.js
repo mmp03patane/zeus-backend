@@ -1,6 +1,6 @@
 const express = require('express');
-const { handleXeroWebhook, handleStripeWebhook } = require('../controllers/webhookController'); // ADD handleStripeWebhook import
-const { sendReviewRequestSMS } = require('../services/twilioService');
+const { handleXeroWebhook, handleStripeWebhook } = require('../controllers/webhookController');
+const cellcastService = require('../services/cellcastService'); // Changed from twilioService
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
 
@@ -9,10 +9,10 @@ const router = express.Router();
 // Xero webhook endpoint (no auth needed - Xero calls this)
 router.post('/xero', handleXeroWebhook);
 
-// ADD THIS: Stripe webhook endpoint (no auth needed - Stripe calls this)
+// Stripe webhook endpoint (no auth needed - Stripe calls this)
 router.post('/stripe', handleStripeWebhook);
 
-// TEST ENDPOINT - Remove this after testing
+// TEST ENDPOINT - Updated for Cellcast
 router.get('/test-sms', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -27,18 +27,23 @@ router.get('/test-sms', authMiddleware, async (req, res) => {
     // Replace with YOUR phone number for testing
     const testPhoneNumber = '+61400803880'; // ← PUT YOUR PHONE NUMBER HERE
     
-    const result = await sendReviewRequestSMS(
-      testPhoneNumber,
-      'Test Customer', // Test customer name
-      user.businessName,
-      user.googleReviewUrl
-    );
+    // Create review request message
+    const message = `Hi Test Customer! 
+
+Thanks for choosing ${user.businessName}! We'd love to hear about your experience.
+
+Please leave us a Google review: ${user.googleReviewUrl}
+
+Your feedback helps us serve you better!`;
+
+    const result = await cellcastService.sendSMS(testPhoneNumber, message);
 
     res.json({
       success: true,
-      message: 'Test SMS sent successfully!',
-      messageSid: result.sid,
-      phoneNumber: testPhoneNumber
+      message: 'Test SMS sent successfully via Cellcast!',
+      messageId: result.messageId,
+      phoneNumber: testPhoneNumber,
+      data: result.data
     });
 
   } catch (error) {
@@ -70,6 +75,24 @@ router.get('/debug-xero', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG ENDPOINT - Test Cellcast connection
+router.get('/test-cellcast', authMiddleware, async (req, res) => {
+  try {
+    const verification = await cellcastService.verifyToken();
+    
+    res.json({
+      success: !!verification,
+      message: verification ? 'Cellcast API key is valid' : 'Cellcast API key verification failed',
+      data: verification
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 

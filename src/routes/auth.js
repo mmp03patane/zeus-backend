@@ -2,7 +2,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const passport = require('../config/passport'); // Import our passport config
+const passport = require('../config/passport');
 const User = require('../models/User');
 const { 
   register, 
@@ -27,7 +27,7 @@ const activeGoogleAuthSessions = new Map();
 setInterval(() => {
   const now = Date.now();
   for (const [key, timestamp] of activeGoogleAuthSessions.entries()) {
-    if (now - timestamp > 30000) { // Remove entries older than 30 seconds
+    if (now - timestamp > 30000) {
       activeGoogleAuthSessions.delete(key);
     }
   }
@@ -59,18 +59,133 @@ const reactivationValidation = [
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.put('/profile', authMiddleware, updateProfile);
-router.get('/me', authMiddleware, getCurrentUser); // Get current user endpoint
 
-// NEW: Account deactivation/reactivation routes
+// FIXED: Enhanced /auth/me endpoint for session recovery
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    console.log('Session verification request from user:', req.user.email);
+    
+    // Fetch fresh user data from database
+    const user = await User.findById(req.user._id).select('-password -__v');
+    
+    if (!user) {
+      console.log('User not found in database:', req.user._id);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // FIXED: Check if account is active using the correct field name
+    if (!user.isActive) {
+      console.log('User account is deactivated:', user.email);
+      return res.status(403).json({
+        success: false,
+        message: 'Account is deactivated',
+        isDeactivated: true
+      });
+    }
+
+    console.log('Session verification successful for user:', user.email);
+    
+    // Return in the expected format for frontend compatibility
+    res.json({
+      success: true,
+      data: { 
+        user: {
+          _id: user._id,
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          businessName: user.businessName,
+          smsBalance: user.smsBalance || 0,
+          googlePlaceId: user.googlePlaceId,
+          googleReviewUrl: user.googleReviewUrl,
+          businessAddress: user.businessAddress,
+          googleRating: user.googleRating,
+          totalReviews: user.totalReviews,
+          registrationComplete: user.registrationComplete,
+          isOnboardingComplete: user.isOnboardingComplete,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Session verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Session verification failed'
+    });
+  }
+});
+
+// FIXED: verify-session endpoint with correct field name
+router.get('/verify-session', authMiddleware, async (req, res) => {
+  try {
+    console.log('Explicit session verification request from user:', req.user.email);
+    
+    const user = await User.findById(req.user._id).select('-password -__v');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // FIXED: Check if account is active using the correct field name
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is deactivated',
+        isDeactivated: true
+      });
+    }
+
+    console.log('Explicit session verification successful for user:', user.email);
+    
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        businessName: user.businessName,
+        smsBalance: user.smsBalance || 0,
+        googlePlaceId: user.googlePlaceId,
+        googleReviewUrl: user.googleReviewUrl,
+        businessAddress: user.businessAddress,
+        googleRating: user.googleRating,
+        totalReviews: user.totalReviews,
+        registrationComplete: user.registrationComplete,
+        isOnboardingComplete: user.isOnboardingComplete,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('Explicit session verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Session verification failed'
+    });
+  }
+});
+
+// Account deactivation/reactivation routes
 router.post('/deactivate', authMiddleware, deactivationValidation, deactivateAccount);
 router.post('/reactivate', reactivationValidation, reactivateAccount);
 
-// NEW: Google OAuth routes (these will be /api/auth/google and /api/auth/google/callback)
+// Google OAuth routes
 router.get('/google', 
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
-    accessType: 'offline',    // ADD THIS
-    prompt: 'consent'         // ADD THIS
+    accessType: 'offline',
+    prompt: 'consent'
   })
 );
 
@@ -87,16 +202,15 @@ router.get('/google/callback',
       return next();
     }
     
-    // Check if we've processed this user recently (within 5 seconds)
     if (activeGoogleAuthSessions.has(userId)) {
       const lastAuth = activeGoogleAuthSessions.get(userId);
       const timeDiff = now - lastAuth;
       
       if (timeDiff < 5000) {
-        console.log(`=== DUPLICATE GOOGLE AUTH BLOCKED ===`);
-        console.log(`User: ${userId}`);
-        console.log(`Time since last auth: ${timeDiff}ms`);
-        console.log(`Blocking duplicate request`);
+        console.log('=== DUPLICATE GOOGLE AUTH BLOCKED ===');
+        console.log('User:', userId);
+        console.log('Time since last auth:', timeDiff, 'ms');
+        console.log('Blocking duplicate request');
         
         return res.status(429).json({ 
           error: 'Authentication request too recent. Please wait a moment.',
@@ -105,57 +219,51 @@ router.get('/google/callback',
       }
     }
     
-    // Record this auth attempt
     activeGoogleAuthSessions.set(userId, now);
-    console.log(`=== GOOGLE AUTH SESSION TRACKED ===`);
-    console.log(`User: ${userId}`);
-    console.log(`Timestamp: ${now}`);
-    console.log(`Active sessions: ${activeGoogleAuthSessions.size}`);
+    console.log('=== GOOGLE AUTH SESSION TRACKED ===');
+    console.log('User:', userId);
+    console.log('Timestamp:', now);
+    console.log('Active sessions:', activeGoogleAuthSessions.size);
     
-    // Continue to googleAuth controller
     next();
   },
   googleAuth
 );
 
-// NEW: Payment verification endpoint - NOW WITH TOKEN REFRESH MIDDLEWARE
+// Payment verification endpoint
 router.get('/verify-payment-session/:sessionId', authMiddleware, ensureValidTokens, async (req, res) => {
   try {
     const { sessionId } = req.params;
-    console.log('🔍 Verifying payment session:', sessionId, 'for user:', req.user.email);
+    console.log('Verifying payment session:', sessionId, 'for user:', req.user.email);
     
-    // Retrieve the session from Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    console.log('💳 Stripe session retrieved:', {
+    console.log('Stripe session retrieved:', {
       id: session.id,
       status: session.payment_status,
       customer_email: session.customer_details?.email
     });
     
-    // Verify this session belongs to the authenticated user
     const sessionEmail = session.customer_details?.email;
     const userEmail = req.user.email;
     
     if (sessionEmail !== userEmail) {
-      console.log('❌ Email mismatch:', { sessionEmail, userEmail });
+      console.log('Email mismatch:', { sessionEmail, userEmail });
       return res.status(403).json({ 
         success: false, 
         message: 'Payment session does not belong to current user' 
       });
     }
     
-    // Check payment was successful
     if (session.payment_status !== 'paid') {
-      console.log('❌ Payment not completed:', session.payment_status);
+      console.log('Payment not completed:', session.payment_status);
       return res.status(400).json({
         success: false,
         message: 'Payment not completed'
       });
     }
     
-    // Generate a fresh token
     const token = generateToken(req.user._id);
-    console.log('✅ Fresh token generated for user:', req.user.email);
+    console.log('Fresh token generated for user:', req.user.email);
     
     res.json({
       success: true,
@@ -168,13 +276,13 @@ router.get('/verify-payment-session/:sessionId', authMiddleware, ensureValidToke
       },
       paymentDetails: {
         sessionId: session.id,
-        amountPaid: session.amount_total / 100, // Convert from cents
+        amountPaid: session.amount_total / 100,
         currency: session.currency
       }
     });
     
   } catch (error) {
-    console.error('❌ Payment session verification error:', error);
+    console.error('Payment session verification error:', error);
     res.status(400).json({ 
       success: false, 
       message: 'Failed to verify payment session',
@@ -183,7 +291,7 @@ router.get('/verify-payment-session/:sessionId', authMiddleware, ensureValidToke
   }
 });
 
-// Complete registration route (MOVED BEFORE module.exports)
+// Complete registration route
 router.post('/complete-registration', async (req, res) => {
   try {
     const {
@@ -195,23 +303,19 @@ router.post('/complete-registration', async (req, res) => {
       selectedPlace
     } = req.body;
 
-    // Validate all required fields are present
     if (!email || !password || !businessName || !googlePlaceId || !googleReviewUrl) {
       return res.status(400).json({ 
         error: 'All registration steps must be completed' 
       });
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user with ALL data at once
     const user = new User({
       email,
       password: hashedPassword,
@@ -226,7 +330,6 @@ router.post('/complete-registration', async (req, res) => {
 
     await user.save();
 
-    // Generate JWT token
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,

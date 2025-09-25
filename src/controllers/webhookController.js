@@ -1,10 +1,43 @@
-const { sendReviewRequestSMS } = require('../services/twilioService');
+const cellcastService = require('../services/cellcastService'); // Changed from twilioService
 const User = require('../models/User');
 const XeroConnection = require('../models/XeroConnection');
 const ReviewRequest = require('../models/ReviewRequest');
 const { getValidXeroConnection } = require('../services/xeroTokenService');
 const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Helper function to send review request SMS using Cellcast
+const sendReviewRequestSMS = async (customerPhone, customerName, businessName, googleReviewUrl, userId) => {
+  try {
+    // Check user balance first
+    const user = await User.findById(userId);
+    if (!user || user.smsBalance <= 0) {
+      throw { code: 'INSUFFICIENT_BALANCE', message: 'SMS failed - $0 balance, please top up' };
+    }
+
+    // Create message using template or default
+    const template = user.smsTemplate?.message || 'Hi {customerName}! Thank you for choosing {businessName}. We\'d love to hear about your experience. Please leave us a review: {reviewUrl}';
+    
+    const message = template
+      .replace('{customerName}', customerName)
+      .replace('{businessName}', businessName)
+      .replace('{reviewUrl}', googleReviewUrl);
+
+    // Send SMS via Cellcast
+    const result = await cellcastService.sendSMS(customerPhone, message);
+
+    // Deduct SMS cost from balance
+    await User.findByIdAndUpdate(userId, { $inc: { smsBalance: -1 } });
+
+    return {
+      sid: result.messageId, // Map Cellcast messageId to Twilio-style sid for compatibility
+      messageId: result.messageId
+    };
+  } catch (error) {
+    console.error('SMS sending error:', error);
+    throw error;
+  }
+};
 
 // UPDATED processInvoiceUpdate function with SMS balance check
 const processInvoiceUpdate = async (user, connection, invoiceId) => {
@@ -50,10 +83,10 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
         const customerName = invoice.Contact?.Name || 'Valued Customer';
 
         let smsStatus = 'failed';
-        let twilioSid = null;
+        let messageId = null; // Changed from twilioSid to messageId
 
         try {
-          // 🚨 PAYWALL: Send SMS with balance check
+          // 🚨 PAYWALL: Send SMS with balance check using Cellcast
           const smsResult = await sendReviewRequestSMS(
             customerPhone,
             customerName,
@@ -62,9 +95,9 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
             user._id  // userId parameter for balance check
           );
 
-          console.log('✅ SMS sent successfully:', smsResult.sid);
+          console.log('✅ SMS sent successfully:', smsResult.messageId);
           smsStatus = 'sent';
-          twilioSid = smsResult.sid;
+          messageId = smsResult.messageId;
 
         } catch (smsError) {
           console.error('❌ SMS sending failed:', smsError.message);
@@ -73,6 +106,12 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
           if (smsError.code === 'INSUFFICIENT_BALANCE') {
             smsStatus = 'SMS failed - $0 balance, please top up';
             console.log('💰 SMS blocked due to insufficient balance');
+          } else if (smsError.message && smsError.message.includes('Insufficient Cellcast credits')) {
+            smsStatus = 'Cellcast account needs recharging';
+            console.log('💰 SMS blocked due to insufficient Cellcast credits');
+          } else if (smsError.message && smsError.message.includes('invalid or expired')) {
+            smsStatus = 'Cellcast API key issue';
+            console.log('🔑 SMS blocked due to API key issue');
           } else {
             smsStatus = 'failed';
           }
@@ -88,7 +127,7 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
           customerPhone: customerPhone,
           smsStatus: smsStatus,
           emailStatus: 'pending',
-          twilioSid: twilioSid,
+          twilioSid: messageId, // Keep field name for compatibility but use Cellcast messageId
           sentAt: smsStatus === 'sent' ? new Date() : null
         });
 

@@ -1,8 +1,8 @@
 const User = require('../models/User');
 const logger = require('../utils/logger');
-const twilioService = require('../services/twilioService');
+const cellcastService = require('../services/cellcastService'); // Changed from twilioService
 
-// Get user's SMS template
+// Get user's SMS template (unchanged)
 const getSMSTemplate = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -23,7 +23,7 @@ const getSMSTemplate = async (req, res) => {
   }
 };
 
-// Update user's SMS template
+// Update user's SMS template (unchanged)
 const updateSMSTemplate = async (req, res) => {
   try {
     const { message, isEnabled } = req.body;
@@ -80,7 +80,7 @@ const updateSMSTemplate = async (req, res) => {
   }
 };
 
-// Test SMS template with sample data
+// Test SMS template with sample data (unchanged)
 const previewSMSTemplate = async (req, res) => {
   try {
     const { message } = req.body;
@@ -114,7 +114,7 @@ const previewSMSTemplate = async (req, res) => {
   }
 };
 
-// NEW: Test SMS endpoint with balance check
+// UPDATED: Test SMS endpoint with Cellcast and balance check
 const sendTestSMS = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
@@ -142,21 +142,28 @@ const sendTestSMS = async (req, res) => {
 
     const testPhoneNumber = phoneNumber || '+61400803880';
     
-    const result = await twilioService.sendReviewRequestSMS(
-      testPhoneNumber,
-      'Test Customer',
-      user.businessName,
-      user.googleReviewUrl,
-      user._id  // Include userId for balance check
-    );
+    // Create test message using template or default
+    const template = user.smsTemplate?.message || 'Hi {customerName}! Thank you for choosing {businessName}. We\'d love to hear about your experience. Please leave us a review: {reviewUrl}';
+    
+    let testMessage = template
+      .replace('{customerName}', 'Test Customer')
+      .replace('{businessName}', user.businessName || 'Your Business')
+      .replace('{reviewUrl}', user.googleReviewUrl);
 
-    // Fetch updated user to get new balance
-    const updatedUser = await User.findById(req.user.id);
+    // Send SMS via Cellcast
+    const result = await cellcastService.sendSMS(testPhoneNumber, testMessage);
+
+    // Deduct SMS cost from balance (assuming 1 credit per SMS)
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { $inc: { smsBalance: -1 } },
+      { new: true }
+    );
 
     res.json({
       success: true,
       message: 'Test SMS sent successfully!',
-      messageSid: result.sid,
+      messageId: result.messageId, // Changed from messageSid to messageId (Cellcast format)
       phoneNumber: testPhoneNumber,
       remainingBalance: updatedUser.smsBalance.toFixed(2)
     });
@@ -164,11 +171,20 @@ const sendTestSMS = async (req, res) => {
   } catch (error) {
     console.error('Test SMS error:', error);
     
-    if (error.code === 'INSUFFICIENT_BALANCE') {
-      return res.status(400).json({
+    // Handle Cellcast-specific errors
+    if (error.message.includes('Insufficient Cellcast credits')) {
+      return res.status(422).json({
         success: false,
-        message: error.message,
+        message: 'Cellcast account needs recharging. Please top up your Cellcast credits.',
         balance: 0
+      });
+    }
+
+    if (error.message.includes('invalid or expired')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Cellcast API key issue. Please contact support.',
+        error: error.message
       });
     }
 
@@ -184,5 +200,5 @@ module.exports = {
   getSMSTemplate,
   updateSMSTemplate,
   previewSMSTemplate,
-  sendTestSMS  // NEW: Export test SMS function
+  sendTestSMS
 };
