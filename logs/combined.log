@@ -606,3 +606,15 @@
 {"level":"info","message":"Xero connection saved successfully for user: 68d232174f095beca3a8a69e","service":"zeus-backend","timestamp":"2025-09-23T05:37:53.533Z"}
 {"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-23T05:41:49.726Z"}
 {"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-23T05:41:51.194Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-26T00:35:10.133Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-26T00:35:11.169Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-26T00:40:24.817Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-26T00:40:25.298Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-27T02:53:42.352Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-27T02:53:43.207Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-27T02:58:03.724Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-27T02:58:04.229Z"}
+{"level":"info","message":"Xero auth initiated for user: 68d232c94f095beca3a8a705","service":"zeus-backend","timestamp":"2025-09-27T03:00:02.679Z"}
+{"level":"info","message":"Xero connection saved successfully for user: 68d232c94f095beca3a8a705","service":"zeus-backend","timestamp":"2025-09-27T03:00:22.767Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-27T03:13:23.620Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-27T03:13:24.049Z"}
