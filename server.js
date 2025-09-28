@@ -43,10 +43,16 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiting with proper proxy handling
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting for webhooks
+  skip: (req) => {
+    return req.path.startsWith('/api/webhook/');
+  }
 });
 app.use(limiter);
 
