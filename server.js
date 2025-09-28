@@ -50,10 +50,19 @@ app.use(limiter);
 // CRITICAL: Raw body middleware for webhooks MUST come BEFORE json() middleware
 
 // Raw body capture for Xero webhooks
-app.use('/api/webhook/xero', express.raw({ type: 'application/json' }), (req, res, next) => {
-  req.rawBody = req.body.toString('utf8');
-  req.body = JSON.parse(req.rawBody);
-  next();
+app.use('/api/webhook/xero', (req, res, next) => {
+  let data = '';
+  req.setEncoding('utf8');
+  req.on('data', chunk => data += chunk);
+  req.on('end', () => {
+    req.rawBody = data;
+    try {
+      req.body = JSON.parse(data);
+    } catch (e) {
+      req.body = {};
+    }
+    next();
+  });
 });
 
 // Raw body capture for Stripe webhooks - FIXED: Uncommented and properly configured
