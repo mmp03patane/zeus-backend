@@ -1,9 +1,10 @@
+
 const axios = require('axios');
 
 class CellcastService {
     constructor() {
         this.apiKey = process.env.CELLCAST_API_KEY;
-        this.baseUrl = 'https://api.cellcast.com';
+        this.baseUrl = 'https://cellcast.com.au/api/v3'; // Correct URL from docs
         
         if (!this.apiKey) {
             throw new Error('CELLCAST_API_KEY is required');
@@ -15,40 +16,76 @@ class CellcastService {
             // Format phone number for Australian numbers
             const formattedNumber = this.formatPhoneNumber(phoneNumber);
             
+            // Correct payload structure from official docs
             const payload = {
-                sender: "#SharedNum#", // Uses Cellcast's shared virtual number
-                message: message,
-                contacts: [formattedNumber],
-                countryCode: 61 // Australia
+                sms_text: message,
+                numbers: [formattedNumber], // Array format as per docs
+                // from: "Zeus", // Optional sender ID - leave blank for shared number
+                // source: "Zeus", // Optional tracking
+                // custom_string: "invoice-payment" // Optional tracking
             };
 
-            const response = await axios.post(`${this.baseUrl}/api/v1/gateway`, payload, {
+            const response = await axios.post(`${this.baseUrl}/send-sms`, payload, {
                 headers: {
-                    'Content-Type': 'application/json',
+                    'APPKEY': this.apiKey, // Use APPKEY header as per docs, not Bearer
                     'Accept': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
+                    'Content-Type': 'application/json'
                 }
             });
 
-            return {
-                success: true,
-                messageId: response.data.data?.queueResponse?.[0]?.MessageId,
-                data: response.data
-            };
+            // Handle Cellcast response format from docs
+            if (response.data.meta && response.data.meta.code === 200) {
+                return {
+                    success: true,
+                    messageId: response.data.data.messages[0].message_id,
+                    data: response.data
+                };
+            } else {
+                throw new Error(response.data.msg || 'SMS sending failed');
+            }
 
         } catch (error) {
             console.error('Cellcast SMS Error:', error.response?.data || error.message);
             
-            // Handle specific Cellcast errors
-            if (error.response?.status === 422) {
-                throw new Error('Insufficient Cellcast credits. Please recharge your account.');
-            }
-            
+            // Handle specific Cellcast errors based on official docs
             if (error.response?.status === 401) {
-                throw new Error('Cellcast API key is invalid or expired.');
+                const errorData = error.response.data;
+                if (errorData && errorData.meta) {
+                    if (errorData.meta.status === 'AUTH_FAILED') {
+                        throw new Error('Cellcast API key is invalid or expired.');
+                    }
+                    if (errorData.meta.status === 'AUTH_FAILED_NO_DATA') {
+                        throw new Error('Cellcast API key not provided.');
+                    }
+                }
+                throw new Error('Cellcast API authentication failed.');
             }
             
-            throw new Error(`Failed to send SMS: ${error.response?.data?.message || error.message}`);
+            if (error.response?.status === 400) {
+                const errorData = error.response.data;
+                if (errorData && errorData.meta) {
+                    if (errorData.meta.status === 'FIELD_INVALID') {
+                        throw new Error(`Cellcast error: ${errorData.msg}`);
+                    }
+                    if (errorData.meta.status === 'RECIPIENTS_ERROR') {
+                        throw new Error('Invalid phone number or recipient issue.');
+                    }
+                    if (errorData.meta.status === 'FIELD_EMPTY') {
+                        throw new Error('Required field is empty.');
+                    }
+                    // Check for credit issues in the message
+                    if (errorData.msg && errorData.msg.includes('credit')) {
+                        throw new Error('Insufficient Cellcast credits. Please recharge your account.');
+                    }
+                }
+                throw new Error(`Cellcast error: ${errorData.msg || 'Bad request'}`);
+            }
+            
+            if (error.response?.status === 429) {
+                throw new Error('Rate limit exceeded. Please wait before sending more SMS.');
+            }
+            
+            throw new Error(`Failed to send SMS: ${error.response?.data?.msg || error.message}`);
         }
     }
 
@@ -74,13 +111,33 @@ class CellcastService {
 
     async verifyToken() {
         try {
-            const response = await axios.get(`${this.baseUrl}/api/v1/user/token/verify`, {
+            // Test with a minimal SMS to verify the API key works
+            // We won't actually send it by using invalid data, just test auth
+            const testPayload = {
+                sms_text: "test",
+                numbers: [] // Empty array will cause RECIPIENTS_ERROR but auth will be validated first
+            };
+
+            await axios.post(`${this.baseUrl}/send-sms`, testPayload, {
                 headers: {
-                    'Authorization': `Bearer ${this.apiKey}`
+                    'APPKEY': this.apiKey,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 }
             });
-            return response.data;
+
+            return true; // If we get here, auth worked
         } catch (error) {
+            // If it's a 401 error, auth failed
+            if (error.response?.status === 401) {
+                return false;
+            }
+            // If it's a 400 error with RECIPIENTS_ERROR, auth worked but recipients were invalid (expected)
+            if (error.response?.status === 400 && 
+                error.response.data?.meta?.status === 'RECIPIENTS_ERROR') {
+                return true; // Auth worked, just recipients were empty as intended
+            }
+            // Any other error, assume auth failed
             console.error('Token verification failed:', error.response?.data || error.message);
             return false;
         }
