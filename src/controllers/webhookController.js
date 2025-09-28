@@ -1,4 +1,4 @@
-const cellcastService = require('../services/cellcastService'); // Changed from twilioService
+const cellcastService = require('../services/cellcastService');
 const User = require('../models/User');
 const XeroConnection = require('../models/XeroConnection');
 const ReviewRequest = require('../models/ReviewRequest');
@@ -6,7 +6,196 @@ const { getValidXeroConnection } = require('../services/xeroTokenService');
 const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// Helper function to send review request SMS using Cellcast
+// In-memory store for processed webhook IDs to prevent duplicates
+const processedWebhooks = new Set();
+
+// Helper function to verify Xero webhook signature (updated for compatibility)
+const verifyXeroSignature = (req, signature, webhookKey) => {
+  try {
+    if (!signature || !webhookKey) {
+      console.log('Missing signature or webhook key');
+      return false;
+    }
+
+    // Use the RAW body string, not the parsed JSON object
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookKey)
+      .update(rawBody, 'utf8')
+      .digest('base64');
+
+    console.log('Signature verification:');
+    console.log('   Raw body length:', rawBody.length);
+    console.log('   Received:', signature);
+    console.log('   Expected:', expectedSignature);
+
+    // Compare signatures using crypto.timingSafeEqual to prevent timing attacks
+    const receivedBuffer = Buffer.from(signature, 'base64');
+    const expectedBuffer = Buffer.from(expectedSignature, 'base64');
+
+    if (receivedBuffer.length !== expectedBuffer.length) {
+      console.log('Signature length mismatch');
+      return false;
+    }
+
+    return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return false;
+  }
+};
+
+// Helper function to generate a unique ID for duplicate detection
+const generateWebhookId = (payload) => {
+    try {
+        const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        // Use a combination of timestamp and event data to create unique ID
+        const timestamp = data.lastEventSequence || Date.now();
+        const events = JSON.stringify(data.events || []);
+        return crypto.createHash('md5').update(`${timestamp}_${events}`).digest('hex');
+    } catch (error) {
+        // Fallback to hash of entire payload
+        const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        return crypto.createHash('md5').update(payloadString).digest('hex');
+    }
+};
+
+// Clean up old processed webhook IDs (keep last 1000 to prevent memory leak)
+const cleanupProcessedWebhooks = () => {
+    if (processedWebhooks.size > 1000) {
+        const webhooksArray = Array.from(processedWebhooks);
+        const toKeep = webhooksArray.slice(-500); // Keep last 500
+        processedWebhooks.clear();
+        toKeep.forEach(id => processedWebhooks.add(id));
+    }
+};
+
+// MAIN XERO WEBHOOK HANDLER - Updated to handle Intent to Receive validation
+const handleXeroWebhook = async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    console.log('📞 Xero webhook received:', JSON.stringify(req.body, null, 2));
+    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+
+    const { events } = req.body;
+    const signature = req.headers['x-xero-signature'];
+    
+    // Get webhook key from environment variables
+    const webhookKey = process.env.XERO_WEBHOOK_KEY;
+    
+    if (!webhookKey) {
+      console.error('❌ XERO_WEBHOOK_KEY not configured');
+      return res.status(500).json({ error: 'Webhook key not configured' });
+    }
+
+    // VERIFY SIGNATURE FIRST (required for all requests)
+    const isValidSignature = verifyXeroSignature(req, signature, webhookKey);
+    
+    if (!isValidSignature) {
+      console.log('❌ Invalid signature - returning 401');
+      return res.status(401).json({ error: 'Unauthorized - Invalid signature' });
+    }
+    
+    console.log('✅ Signature verified successfully');
+
+    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
+    if (!events || events.length === 0) {
+      console.log('🔐 Xero webhook verification request detected (empty events)');
+      console.log('✅ Returning 200 OK for verification');
+      return res.status(200).json({
+        message: 'Intent to receive validation successful',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check for duplicates before processing
+    const webhookId = generateWebhookId(req.rawBody || JSON.stringify(req.body));
+    
+    if (processedWebhooks.has(webhookId)) {
+      console.log('Duplicate webhook detected, ignoring:', webhookId);
+      return res.status(200).json({ message: 'Duplicate webhook ignored' });
+    }
+
+    // Add to processed set
+    processedWebhooks.add(webhookId);
+    cleanupProcessedWebhooks();
+
+    console.log(`📦 Processing ${events.length} event(s)`);
+
+    // Process events in your existing way
+    for (const event of events) {
+      console.log(`🔍 Processing event: ${event.eventCategory} - ${event.eventType}`);
+
+      // We only care about invoice updates
+      if (event.eventCategory === 'INVOICE' && event.eventType === 'UPDATE') {
+        
+        const tenantId = event.tenantId;
+        const resourceId = event.resourceId; // This is the invoice ID
+        
+        console.log(`📋 Processing invoice update for tenant: ${tenantId}, invoice: ${resourceId}`);
+        
+        // Find the connection by tenant ID first
+        const connection = await XeroConnection.findOne({
+          tenantId,
+          isActive: true
+        });
+        
+        if (!connection) {
+          console.log('❌ No active connection found for tenant:', tenantId);
+          continue;
+        }
+        
+        console.log('✅ Found active connection for tenant');
+        
+        // Find the user and get valid Xero connection
+        const user = await User.findById(connection.userId);
+        const validConnection = await getValidXeroConnection(connection.userId);
+        
+        if (!user || !validConnection) {
+          console.log('❌ User or valid connection not found for tenant:', tenantId);
+          continue;
+        }
+
+        console.log(`✅ Found user: ${user.businessName || user.email}`);
+
+        // Get the updated invoice details from Xero
+        await processInvoiceUpdate(user, validConnection, resourceId);
+      } else {
+        console.log(`⏭️ Skipping event: ${event.eventCategory} - ${event.eventType}`);
+      }
+    }
+
+    // Ensure response time is under 5 seconds
+    const processingTime = Date.now() - startTime;
+    console.log(`Webhook processed in ${processingTime}ms`);
+
+    if (processingTime > 4500) { // Warn if close to 5 second limit
+      console.warn('Webhook processing took longer than expected:', processingTime, 'ms');
+    }
+
+    res.status(200).json({ 
+      message: 'Webhook processed successfully',
+      eventsProcessed: events.length,
+      processingTimeMs: processingTime
+    });
+
+  } catch (error) {
+    console.error('❌ Webhook processing error:', error);
+    
+    // Ensure we still respond quickly even on error
+    const processingTime = Date.now() - startTime;
+    console.log(`Error response sent in ${processingTime}ms`);
+    
+    res.status(500).json({ 
+      error: 'Webhook processing failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+// Helper function to send review request SMS using Cellcast (PRESERVED FROM YOUR CODE)
 const sendReviewRequestSMS = async (customerPhone, customerName, businessName, googleReviewUrl, userId) => {
   try {
     // Check user balance first
@@ -39,7 +228,7 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
   }
 };
 
-// UPDATED processInvoiceUpdate function with SMS balance check
+// UPDATED processInvoiceUpdate function with SMS balance check (PRESERVED FROM YOUR CODE)
 const processInvoiceUpdate = async (user, connection, invoiceId) => {
   try {
     console.log(`🔍 Fetching invoice details for: ${invoiceId}`);
@@ -168,94 +357,7 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
   }
 };
 
-const handleXeroWebhook = async (req, res) => {
-  try {
-    console.log('📞 Xero webhook received:', JSON.stringify(req.body, null, 2));
-    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
-
-    const { events } = req.body;
-    const signature = req.headers['x-xero-signature'];
-    
-    // Get webhook key from environment variables
-    const webhookKey = process.env.XERO_WEBHOOK_KEY;
-    
-    if (!webhookKey) {
-      console.error('❌ XERO_WEBHOOK_KEY not configured');
-      return res.status(500).json({ error: 'Webhook key not configured' });
-    }
-
-    // VERIFY SIGNATURE FIRST (required for all requests)
-    const isValidSignature = verifyXeroSignature(req, signature, webhookKey);
-    
-    if (!isValidSignature) {
-      console.log('❌ Invalid signature - returning 401');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-    
-    console.log('✅ Signature verified successfully');
-
-    // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
-    if (!events || events.length === 0) {
-      console.log('🔐 Xero webhook verification request detected (empty events)');
-      console.log('✅ Returning 200 OK for verification');
-      return res.status(200).json({
-        message: 'Webhook endpoint verified successfully',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    console.log(`📦 Processing ${events.length} event(s)`);
-
-    for (const event of events) {
-      console.log(`🔍 Processing event: ${event.eventCategory} - ${event.eventType}`);
-
-      // We only care about invoice updates
-      if (event.eventCategory === 'INVOICE' && event.eventType === 'UPDATE') {
-        
-        const tenantId = event.tenantId;
-        const resourceId = event.resourceId; // This is the invoice ID
-        
-        console.log(`📋 Processing invoice update for tenant: ${tenantId}, invoice: ${resourceId}`);
-        
-        // Find the connection by tenant ID first
-        const connection = await XeroConnection.findOne({
-          tenantId,
-          isActive: true
-        });
-        
-        if (!connection) {
-          console.log('❌ No active connection found for tenant:', tenantId);
-          continue;
-        }
-        
-        console.log('✅ Found active connection for tenant');
-        
-        // Find the user and get valid Xero connection
-        const user = await User.findById(connection.userId);
-        const validConnection = await getValidXeroConnection(connection.userId);
-        
-        if (!user || !validConnection) {
-          console.log('❌ User or valid connection not found for tenant:', tenantId);
-          continue;
-        }
-
-        console.log(`✅ Found user: ${user.businessName || user.email}`);
-
-        // Get the updated invoice details from Xero
-        await processInvoiceUpdate(user, validConnection, resourceId);
-      } else {
-        console.log(`⏭️ Skipping event: ${event.eventCategory} - ${event.eventType}`);
-      }
-    }
-
-    res.status(200).json({ message: 'Webhook processed successfully' });
-
-  } catch (error) {
-    console.error('❌ Webhook processing error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
-  }
-};
-
+// STRIPE WEBHOOK HANDLER (PRESERVED FROM YOUR CODE)
 const handleStripeWebhook = async (req, res) => {
   try {
     const sig = req.headers['stripe-signature'];
@@ -310,43 +412,7 @@ const handleStripeWebhook = async (req, res) => {
   }
 };
 
-// Function to verify Xero webhook signature
-const verifyXeroSignature = (req, signature, webhookKey) => {
-  try {
-    if (!signature || !webhookKey) {
-      console.log('❌ Missing signature or webhook key');
-      return false;
-    }
-
-    // Use the RAW body string, not the parsed JSON object
-    const rawBody = req.rawBody || JSON.stringify(req.body);
-    
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookKey)
-      .update(rawBody, 'utf8')
-      .digest('base64');
-
-    console.log('🔐 Signature verification:');
-    console.log('   Raw body length:', rawBody.length);
-    console.log('   Received:', signature);
-    console.log('   Expected:', expectedSignature);
-
-    // Compare signatures using crypto.timingSafeEqual to prevent timing attacks
-    const receivedBuffer = Buffer.from(signature, 'base64');
-    const expectedBuffer = Buffer.from(expectedSignature, 'base64');
-
-    if (receivedBuffer.length !== expectedBuffer.length) {
-      console.log('❌ Signature length mismatch');
-      return false;
-    }
-
-    return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
-  } catch (error) {
-    console.error('❌ Error verifying signature:', error);
-    return false;
-  }
-};
-
+// PHONE EXTRACTION LOGIC (PRESERVED FROM YOUR CODE)
 const extractPhoneFromInvoice = (invoice) => {
   // Try different places where phone might be stored
   const contact = invoice.Contact;
@@ -401,7 +467,7 @@ const extractPhoneFromInvoice = (invoice) => {
   return null;
 };
 
-// Helper function to build full phone number from Xero phone components
+// Helper function to build full phone number from Xero phone components (PRESERVED FROM YOUR CODE)
 const buildFullPhoneNumber = (phone) => {
   if (!phone.PhoneNumber) return null;
 
@@ -428,7 +494,7 @@ const buildFullPhoneNumber = (phone) => {
   return fullNumber;
 };
 
-// Helper function to format phone numbers that come as single strings
+// Helper function to format phone numbers that come as single strings (PRESERVED FROM YOUR CODE)
 const formatPhoneNumber = (phoneNumber) => {
   if (!phoneNumber) return null;
 
