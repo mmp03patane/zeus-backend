@@ -129,7 +129,7 @@ const handleXeroWebhook = async (req, res) => {
       console.log(`🔍 Processing event: ${event.eventCategory} - ${event.eventType}`);
 
       // We only care about invoice updates
-      if (event.eventCategory === 'INVOICE' && event.eventType === 'UPDATE') {
+      if (event.eventCategory === 'INVOICE' && (event.eventType === 'UPDATE' || event.eventType === 'CREATE')) {
         
         const tenantId = event.tenantId;
         const resourceId = event.resourceId; // This is the invoice ID
