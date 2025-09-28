@@ -35,7 +35,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://dashboard.zeusapp.co', 'https://zeusapp.co', 'https://www.zeusapp.co']
+    ? ['https://zeusapp.co', 'https://www.zeusapp.co']
     : ['http://localhost:5173'],
   credentials: true
 }));
