@@ -124,9 +124,21 @@ if (stripeRoutes) {
   console.error('stripeRoutes is undefined');
 }
 
-// Health check
+// Health check routes
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    service: 'zeus-backend'
+  });
+});
+
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    message: 'Zeus Backend API',
+    status: 'running'
+  });
 });
 
 // Error handling middleware
