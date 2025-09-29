@@ -110,7 +110,7 @@ const userSchema = new mongoose.Schema({
   smsTemplate: {
     message: {
       type: String,
-      default: 'Hi {customerName}! Thank you for choosing {businessName}. We\'d love to hear about your experience. Please leave us a review: {reviewUrl}'
+      default: 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback—please feel free to leave us a {reviewUrl}'
     },
     isEnabled: {
       type: Boolean,

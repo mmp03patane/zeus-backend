@@ -12,7 +12,7 @@ const getSMSTemplate = async (req, res) => {
     }
 
     const template = user.smsTemplate || {
-      message: 'Hi {customerName}! Thank you for choosing {businessName}. We\'d love to hear about your experience. Please leave us a review: {reviewUrl}',
+      message: 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback—please feel free to leave us a {reviewUrl}',
       isEnabled: true
     };
 
@@ -93,7 +93,7 @@ const previewSMSTemplate = async (req, res) => {
     const sampleData = {
       customerName: 'John Smith',
       businessName: 'ABC Company',
-      reviewUrl: 'https://g.page/r/abc123'
+      reviewUrl: 'Google review'
     };
 
     // Replace placeholders with sample data

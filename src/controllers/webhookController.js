@@ -76,8 +76,8 @@ const handleXeroWebhook = async (req, res) => {
   const startTime = Date.now();
   
   try {
-    console.log('📞 Xero webhook received:', JSON.stringify(req.body, null, 2));
-    console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Xero webhook received:', JSON.stringify(req.body, null, 2));
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
 
     const { events } = req.body;
     const signature = req.headers['x-xero-signature'];
@@ -86,7 +86,7 @@ const handleXeroWebhook = async (req, res) => {
     const webhookKey = process.env.XERO_WEBHOOK_KEY;
     
     if (!webhookKey) {
-      console.error('❌ XERO_WEBHOOK_KEY not configured');
+      console.error('XERO_WEBHOOK_KEY not configured');
       return res.status(500).json({ error: 'Webhook key not configured' });
     }
 
@@ -94,16 +94,16 @@ const handleXeroWebhook = async (req, res) => {
     const isValidSignature = verifyXeroSignature(req, signature, webhookKey);
     
     if (!isValidSignature) {
-      console.log('❌ Invalid signature - returning 401');
+      console.log('Invalid signature - returning 401');
       return res.status(401).json({ error: 'Unauthorized - Invalid signature' });
     }
     
-    console.log('✅ Signature verified successfully');
+    console.log('Signature verified successfully');
 
     // HANDLE XERO WEBHOOK VERIFICATION ("Intent to receive")
     if (!events || events.length === 0) {
-      console.log('🔐 Xero webhook verification request detected (empty events)');
-      console.log('✅ Returning 200 OK for verification');
+      console.log('Xero webhook verification request detected (empty events)');
+      console.log('Returning 200 OK for verification');
       return res.status(200).json({
         message: 'Intent to receive validation successful',
         timestamp: new Date().toISOString()
@@ -122,11 +122,11 @@ const handleXeroWebhook = async (req, res) => {
     processedWebhooks.add(webhookId);
     cleanupProcessedWebhooks();
 
-    console.log(`📦 Processing ${events.length} event(s)`);
+    console.log(`Processing ${events.length} event(s)`);
 
     // Process events in your existing way
     for (const event of events) {
-      console.log(`🔍 Processing event: ${event.eventCategory} - ${event.eventType}`);
+      console.log(`Processing event: ${event.eventCategory} - ${event.eventType}`);
 
       // We only care about invoice updates
       if (event.eventCategory === 'INVOICE' && (event.eventType === 'UPDATE' || event.eventType === 'CREATE')) {
@@ -134,7 +134,7 @@ const handleXeroWebhook = async (req, res) => {
         const tenantId = event.tenantId;
         const resourceId = event.resourceId; // This is the invoice ID
         
-        console.log(`📋 Processing invoice update for tenant: ${tenantId}, invoice: ${resourceId}`);
+        console.log(`Processing invoice update for tenant: ${tenantId}, invoice: ${resourceId}`);
         
         // Find the connection by tenant ID first
         const connection = await XeroConnection.findOne({
@@ -143,27 +143,27 @@ const handleXeroWebhook = async (req, res) => {
         });
         
         if (!connection) {
-          console.log('❌ No active connection found for tenant:', tenantId);
+          console.log('No active connection found for tenant:', tenantId);
           continue;
         }
         
-        console.log('✅ Found active connection for tenant');
+        console.log('Found active connection for tenant');
         
         // Find the user and get valid Xero connection
         const user = await User.findById(connection.userId);
         const validConnection = await getValidXeroConnection(connection.userId);
         
         if (!user || !validConnection) {
-          console.log('❌ User or valid connection not found for tenant:', tenantId);
+          console.log('User or valid connection not found for tenant:', tenantId);
           continue;
         }
 
-        console.log(`✅ Found user: ${user.businessName || user.email}`);
+        console.log(`Found user: ${user.businessName || user.email}`);
 
         // Get the updated invoice details from Xero
         await processInvoiceUpdate(user, validConnection, resourceId);
       } else {
-        console.log(`⏭️ Skipping event: ${event.eventCategory} - ${event.eventType}`);
+        console.log(`Skipping event: ${event.eventCategory} - ${event.eventType}`);
       }
     }
 
@@ -182,7 +182,7 @@ const handleXeroWebhook = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Webhook processing error:', error);
+    console.error('Webhook processing error:', error);
     
     // Ensure we still respond quickly even on error
     const processingTime = Date.now() - startTime;
@@ -195,35 +195,81 @@ const handleXeroWebhook = async (req, res) => {
   }
 };
 
-// Helper function to send review request SMS using Cellcast (PRESERVED FROM YOUR CODE)
+// Helper function to send review request SMS using Cellcast with character-based charging
 const sendReviewRequestSMS = async (customerPhone, customerName, businessName, googleReviewUrl, userId) => {
   try {
-    // Check user balance first
+    // Get user for balance check and template
     const user = await User.findById(userId);
-    if (!user || user.smsBalance <= 0) {
-      throw { code: 'INSUFFICIENT_BALANCE', message: 'SMS failed - $0 balance, please top up' };
+    if (!user) {
+      throw new Error('User not found');
     }
 
     // Create message using template or default
-    const template = user.smsTemplate?.message || 'Hi {customerName}! Thank you for choosing {businessName}. We\'d love to hear about your experience. Please leave us a review: {reviewUrl}';
+    const template = user.smsTemplate?.message || 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback—please feel free to leave us a {reviewUrl}';
     
+    // Replace placeholders with actual data
     const message = template
       .replace('{customerName}', customerName)
       .replace('{businessName}', businessName)
-      .replace('{reviewUrl}', googleReviewUrl);
+      .replace('{reviewUrl}', 'Google review');
 
-    // Send SMS via Cellcast
+    // ============================================
+    // CHARACTER COUNT & COST CALCULATION
+    // ============================================
+    
+    // Count actual characters that Cellcast will see
+    const characterCount = message.length;
+    
+    // Hard limit: 300 characters max
+    if (characterCount > 300) {
+      throw new Error(`Message too long (${characterCount} characters). Maximum allowed is 300 characters.`);
+    }
+    
+    // Calculate number of SMS needed (1 SMS = up to 150 chars, 2 SMS = 151-300 chars)
+    const smsCount = characterCount <= 150 ? 1 : 2;
+    
+    // Calculate cost ($0.25 per SMS)
+    const smsCost = smsCount * 0.25;
+    
+    console.log(`SMS Stats: ${characterCount} chars, ${smsCount} SMS, $${smsCost.toFixed(2)} cost`);
+    
+    // ============================================
+    // BALANCE CHECK (using calculated cost)
+    // ============================================
+    
+    if (user.smsBalance < smsCost) {
+      throw { 
+        code: 'INSUFFICIENT_BALANCE', 
+        message: `SMS failed - Insufficient balance. Required: $${smsCost.toFixed(2)}, Available: $${user.smsBalance.toFixed(2)}` 
+      };
+    }
+
+    // ============================================
+    // SEND SMS VIA CELLCAST
+    // ============================================
+    
     const result = await cellcastService.sendSMS(customerPhone, message);
 
-    // Deduct SMS cost from balance
-    await User.findByIdAndUpdate(userId, { $inc: { smsBalance: -0.25 } });
+    // ============================================
+    // DEDUCT BALANCE (deduct actual calculated cost)
+    // ============================================
+    
+    user.smsBalance -= smsCost;
+    await user.save();
+
+    console.log(`SMS sent successfully. Balance deducted: $${smsCost.toFixed(2)}, Remaining: $${user.smsBalance.toFixed(2)}`);
 
     return {
       sid: result.messageId, // Map Cellcast messageId to Twilio-style sid for compatibility
-      messageId: result.messageId
+      messageId: result.messageId,
+      characterCount,
+      smsCount,
+      cost: smsCost,
+      remainingBalance: user.smsBalance
     };
+
   } catch (error) {
-    console.error('SMS sending error:', error);
+    console.error('Failed to send SMS:', error.message);
     throw error;
   }
 };
@@ -231,7 +277,7 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
 // UPDATED processInvoiceUpdate function with SMS balance check AND DATABASE DUPLICATE PREVENTION
 const processInvoiceUpdate = async (user, connection, invoiceId) => {
   try {
-    console.log(`🔍 Fetching invoice details for: ${invoiceId}`);
+    console.log(`Fetching invoice details for: ${invoiceId}`);
 
     // Fetch the invoice details from Xero using the valid connection
     const response = await fetch(`https://api.xero.com/api.xro/2.0/Invoices/${invoiceId}`, {
@@ -243,18 +289,18 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
     });
 
     if (!response.ok) {
-      console.error('❌ Failed to fetch invoice:', response.status, response.statusText);
+      console.error('Failed to fetch invoice:', response.status, response.statusText);
       return;
     }
 
     const data = await response.json();
     const invoice = data.Invoices[0];
 
-    console.log(`📋 Invoice Status: ${invoice.Status}, Amount Due: ${invoice.AmountDue}`);
+    console.log(`Invoice Status: ${invoice.Status}, Amount Due: ${invoice.AmountDue}`);
 
     // Check if invoice is paid (Status = 'PAID' and AmountDue = 0)
     if (invoice.Status === 'PAID' && invoice.AmountDue === 0) {
-      console.log('💰 Invoice is PAID! Processing review request...');
+      console.log('Invoice is PAID! Processing review request...');
 
       // DATABASE DUPLICATE CHECK: Check if SMS was already sent for this invoice
       const existingSMS = await ReviewRequest.findOne({ 
@@ -263,7 +309,7 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
       });
 
       if (existingSMS) {
-        console.log('🚫 SMS already sent for this invoice on', existingSMS.sentAt, '- skipping duplicate');
+        console.log('SMS already sent for this invoice on', existingSMS.sentAt, '- skipping duplicate');
         return;
       }
 
@@ -272,52 +318,56 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
 
       // FALLBACK: Use test phone number if none found
       if (!customerPhone) {
-        console.log('📱 No phone found in invoice, using test number...');
+        console.log('No phone found in invoice, using test number...');
         customerPhone = '+61400803880'; // Your test number
       }
 
       if (customerPhone) {
-        console.log(`📱 Sending SMS to: ${customerPhone}`);
+        console.log(`Sending SMS to: ${customerPhone}`);
 
         // Extract customer name
         const customerName = invoice.Contact?.Name || 'Valued Customer';
 
         let smsStatus = 'failed';
-        let messageId = null; // Changed from twilioSid to messageId
+        let messageId = null;
 
         try {
-          // 🚨 PAYWALL: Send SMS with balance check using Cellcast
+          // Send SMS with balance check using Cellcast
           const smsResult = await sendReviewRequestSMS(
             customerPhone,
             customerName,
             user.businessName || 'this business',
             user.googleReviewUrl,
-            user._id  // userId parameter for balance check
+            user._id
           );
 
-          console.log('✅ SMS sent successfully:', smsResult.messageId);
+          console.log('SMS sent successfully:', smsResult.messageId);
+          console.log(`Character count: ${smsResult.characterCount}, SMS count: ${smsResult.smsCount}, Cost: $${smsResult.cost.toFixed(2)}`);
           smsStatus = 'sent';
           messageId = smsResult.messageId;
 
         } catch (smsError) {
-          console.error('❌ SMS sending failed:', smsError.message);
+          console.error('SMS sending failed:', smsError.message);
           
-          // 🚨 PAYWALL: Handle insufficient balance error
+          // Handle insufficient balance error
           if (smsError.code === 'INSUFFICIENT_BALANCE') {
             smsStatus = 'SMS failed - $0 balance, please top up';
-            console.log('💰 SMS blocked due to insufficient balance');
+            console.log('SMS blocked due to insufficient balance');
           } else if (smsError.message && smsError.message.includes('Insufficient Cellcast credits')) {
             smsStatus = 'Cellcast account needs recharging';
-            console.log('💰 SMS blocked due to insufficient Cellcast credits');
+            console.log('SMS blocked due to insufficient Cellcast credits');
           } else if (smsError.message && smsError.message.includes('invalid or expired')) {
             smsStatus = 'Cellcast API key issue';
-            console.log('🔑 SMS blocked due to API key issue');
+            console.log('SMS blocked due to API key issue');
+          } else if (smsError.message && smsError.message.includes('too long')) {
+            smsStatus = 'Message exceeded 300 character limit';
+            console.log('SMS blocked - message too long');
           } else {
             smsStatus = 'failed';
           }
         }
 
-        // 📊 Log this activity in database for Zeus timeline
+        // Log this activity in database for Zeus timeline
         const reviewRequest = new ReviewRequest({
           userId: user._id,
           xeroInvoiceId: invoiceId,
@@ -327,24 +377,24 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
           customerPhone: customerPhone,
           smsStatus: smsStatus,
           emailStatus: 'pending',
-          twilioSid: messageId, // Keep field name for compatibility but use Cellcast messageId
+          twilioSid: messageId,
           sentAt: smsStatus === 'sent' ? new Date() : null
         });
 
         await reviewRequest.save();
-        console.log('📊 Review request logged to database:', reviewRequest._id);
+        console.log('Review request logged to database:', reviewRequest._id);
 
       } else {
-        console.log('❌ No phone number found in invoice');
+        console.log('No phone number found in invoice');
       }
     } else {
-      console.log('⏳ Invoice not fully paid yet, skipping SMS');
+      console.log('Invoice not fully paid yet, skipping SMS');
     }
 
   } catch (error) {
-    console.error('❌ Error processing invoice:', error);
+    console.error('Error processing invoice:', error);
 
-    // 📊 Log failed attempt if we have basic info
+    // Log failed attempt if we have basic info
     if (invoiceId && user) {
       try {
         const failedRequest = new ReviewRequest({
@@ -360,9 +410,9 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
         });
 
         await failedRequest.save();
-        console.log('📊 Failed request logged to database');
+        console.log('Failed request logged to database');
       } catch (dbError) {
-        console.error('❌ Failed to log error to database:', dbError);
+        console.error('Failed to log error to database:', dbError);
       }
     }
   }
@@ -430,22 +480,22 @@ const extractPhoneFromInvoice = (invoice) => {
 
   if (!contact) return null;
 
-  console.log('🔍 Full invoice contact data:', JSON.stringify(contact, null, 2));
+  console.log('Full invoice contact data:', JSON.stringify(contact, null, 2));
 
   // Check contact phones array
   if (contact.Phones && contact.Phones.length > 0) {
-    console.log('📞 Found phones array:', contact.Phones);
+    console.log('Found phones array:', contact.Phones);
 
     // Look for mobile first, then any phone with proper number construction
     for (const phone of contact.Phones) {
       if (phone.PhoneNumber) {
-        console.log('📞 Found phone with components:', phone);
+        console.log('Found phone with components:', phone);
 
         // Build full international number from components
         let fullNumber = buildFullPhoneNumber(phone);
 
         if (fullNumber) {
-          console.log('📱 Built full number:', fullNumber);
+          console.log('Built full number:', fullNumber);
           return fullNumber;
         }
       }
@@ -454,27 +504,27 @@ const extractPhoneFromInvoice = (invoice) => {
 
   // Check for direct phone properties (fallback)
   if (contact.Phone) {
-    console.log('📞 Found direct phone:', contact.Phone);
+    console.log('Found direct phone:', contact.Phone);
     return formatPhoneNumber(contact.Phone);
   }
 
   if (contact.MobilePhone) {
-    console.log('📱 Found mobile phone:', contact.MobilePhone);
+    console.log('Found mobile phone:', contact.MobilePhone);
     return formatPhoneNumber(contact.MobilePhone);
   }
 
   // Check addresses for phone numbers
   if (contact.Addresses && contact.Addresses.length > 0) {
-    console.log('🏠 Checking addresses for phone numbers...');
+    console.log('Checking addresses for phone numbers...');
     for (const address of contact.Addresses) {
       if (address.Phone) {
-        console.log('🏠 Found phone in address:', address.Phone);
+        console.log('Found phone in address:', address.Phone);
         return formatPhoneNumber(address.Phone);
       }
     }
   }
 
-  console.log('❌ No phone number found in any location');
+  console.log('No phone number found in any location');
   return null;
 };
 
@@ -500,7 +550,7 @@ const buildFullPhoneNumber = (phone) => {
   // Add the main number
   fullNumber += phone.PhoneNumber;
 
-  console.log(`🔧 Built number: Country(${phone.PhoneCountryCode}) + Area(${phone.PhoneAreaCode}) + Number(${phone.PhoneNumber}) = ${fullNumber}`);
+  console.log(`Built number: Country(${phone.PhoneCountryCode}) + Area(${phone.PhoneAreaCode}) + Number(${phone.PhoneNumber}) = ${fullNumber}`);
 
   return fullNumber;
 };
