@@ -12,7 +12,7 @@ const getSMSTemplate = async (req, res) => {
     }
 
     const template = user.smsTemplate || {
-      message: 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback—please feel free to leave us a {reviewUrl}',
+      message: 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback, please feel free to leave us a {reviewUrl}',
       isEnabled: true
     };
 

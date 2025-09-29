@@ -205,7 +205,7 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
     }
 
     // Create message using template or default
-    const template = user.smsTemplate?.message || 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback—please feel free to leave us a {reviewUrl}';
+    const template = user.smsTemplate?.message || 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback, please feel free to leave us a {reviewUrl}';
     
     // Replace placeholders with actual data
     const message = template
