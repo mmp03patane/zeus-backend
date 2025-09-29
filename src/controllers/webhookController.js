@@ -228,7 +228,7 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
   }
 };
 
-// UPDATED processInvoiceUpdate function with SMS balance check (PRESERVED FROM YOUR CODE)
+// UPDATED processInvoiceUpdate function with SMS balance check AND DATABASE DUPLICATE PREVENTION
 const processInvoiceUpdate = async (user, connection, invoiceId) => {
   try {
     console.log(`🔍 Fetching invoice details for: ${invoiceId}`);
@@ -255,6 +255,17 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
     // Check if invoice is paid (Status = 'PAID' and AmountDue = 0)
     if (invoice.Status === 'PAID' && invoice.AmountDue === 0) {
       console.log('💰 Invoice is PAID! Processing review request...');
+
+      // DATABASE DUPLICATE CHECK: Check if SMS was already sent for this invoice
+      const existingSMS = await ReviewRequest.findOne({ 
+        xeroInvoiceId: invoiceId,
+        smsStatus: 'sent' 
+      });
+
+      if (existingSMS) {
+        console.log('🚫 SMS already sent for this invoice on', existingSMS.sentAt, '- skipping duplicate');
+        return;
+      }
 
       // Extract customer phone from invoice
       let customerPhone = extractPhoneFromInvoice(invoice);
