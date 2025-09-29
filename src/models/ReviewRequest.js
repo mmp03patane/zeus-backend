@@ -19,7 +19,7 @@ const reviewRequestSchema = new mongoose.Schema({
   },
   customerEmail: {
     type: String,
-    required: true
+    default: null  // Changed from required to optional
   },
   customerPhone: {
     type: String,
@@ -27,19 +27,10 @@ const reviewRequestSchema = new mongoose.Schema({
   },
   smsStatus: {
     type: String,
-    enum: ['pending', 'sent', 'failed', 'delivered'],
-    default: 'pending'
-  },
-  emailStatus: {
-    type: String,
-    enum: ['pending', 'sent', 'failed', 'delivered'],
+    enum: ['pending', 'sent', 'failed', 'delivered', 'SMS failed - $0 balance, please top up', 'Cellcast account needs recharging', 'Cellcast API key issue'],
     default: 'pending'
   },
   twilioSid: {
-    type: String,
-    default: null
-  },
-  sendgridMessageId: {
     type: String,
     default: null
   },

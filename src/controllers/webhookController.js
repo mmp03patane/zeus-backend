@@ -216,7 +216,7 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
     const result = await cellcastService.sendSMS(customerPhone, message);
 
     // Deduct SMS cost from balance
-    await User.findByIdAndUpdate(userId, { $inc: { smsBalance: -1 } });
+    await User.findByIdAndUpdate(userId, { $inc: { smsBalance: -0.25 } });
 
     return {
       sid: result.messageId, // Map Cellcast messageId to Twilio-style sid for compatibility
