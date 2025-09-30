@@ -91,7 +91,7 @@ const updateSMSTemplate = async (req, res) => {
   }
 };
 
-// Test SMS template with sample data (unchanged)
+// UPDATED: Test SMS template with sample data - now shows real URL
 const previewSMSTemplate = async (req, res) => {
   try {
     const { message } = req.body;
@@ -100,11 +100,18 @@ const previewSMSTemplate = async (req, res) => {
       return res.status(400).json({ message: 'Message is required' });
     }
 
-    // Sample data for preview
+    // Get user to fetch their actual Google review URL
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Sample data for preview - USE REAL URL
     const sampleData = {
       customerName: 'John Smith',
-      businessName: 'ABC Company',
-      reviewUrl: 'Google review'
+      businessName: user.businessName || 'ABC Company',
+      reviewUrl: user.googleReviewUrl || 'https://g.page/r/YourReviewLinkHere'
     };
 
     // Replace placeholders with sample data
