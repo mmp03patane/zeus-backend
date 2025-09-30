@@ -3,6 +3,7 @@ const User = require('../models/User');
 const XeroConnection = require('../models/XeroConnection');
 const ReviewRequest = require('../models/ReviewRequest');
 const { getValidXeroConnection } = require('../services/xeroTokenService');
+const { calculateSMSCost } = require('../utils/smsCharacterUtils');
 const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -195,7 +196,7 @@ const handleXeroWebhook = async (req, res) => {
   }
 };
 
-// Helper function to send review request SMS using Cellcast with character-based charging
+// Helper function to send review request SMS using Cellcast with Unicode-aware character counting
 const sendReviewRequestSMS = async (customerPhone, customerName, businessName, googleReviewUrl, userId) => {
   try {
     // Get user for balance check and template
@@ -207,40 +208,40 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
     // Create message using template or default
     const template = user.smsTemplate?.message || 'Hi {customerName}! Thanks for choosing {businessName}. We\'d love your feedback, please feel free to leave us a {reviewUrl}';
     
-    // Replace placeholders with actual data
+    // Replace placeholders with actual data (including full Google Review URL)
     const message = template
       .replace('{customerName}', customerName)
       .replace('{businessName}', businessName)
-      .replace('{reviewUrl}', 'Google review');
+      .replace('{reviewUrl}', googleReviewUrl);
 
     // ============================================
     // CHARACTER COUNT & COST CALCULATION
+    // Uses Unicode-aware detection from smsCharacterUtils
     // ============================================
     
-    // Count actual characters that Cellcast will see
-    const characterCount = message.length;
+    const { smsCount, cost, stats } = calculateSMSCost(message);
     
-    // Hard limit: 300 characters max
-    if (characterCount > 300) {
-      throw new Error(`Message too long (${characterCount} characters). Maximum allowed is 300 characters.`);
+    console.log(`SMS Stats - Encoding: ${stats.encoding}, Chars: ${stats.charCount}, SMS: ${smsCount}, Cost: $${cost.toFixed(2)}`);
+    
+    // Warn if Unicode detected (reduces char limit to 70)
+    if (stats.unicodeDetection.hasUnicode) {
+      console.warn('Unicode characters detected in message:', stats.unicodeDetection.unicodeChars);
+      console.warn('Character limit reduced from 160 to 70 per SMS due to Unicode encoding');
     }
     
-    // Calculate number of SMS needed (1 SMS = up to 150 chars, 2 SMS = 151-300 chars)
-    const smsCount = characterCount <= 150 ? 1 : 2;
-    
-    // Calculate cost ($0.25 per SMS)
-    const smsCost = smsCount * 0.25;
-    
-    console.log(`SMS Stats: ${characterCount} chars, ${smsCount} SMS, $${smsCost.toFixed(2)} cost`);
+    // Hard limit check (402 for Unicode, 918 for GSM-7)
+    if (!stats.isValid) {
+      throw new Error(`Message too long (${stats.charCount} characters). Maximum for ${stats.encoding}: ${stats.maxLength} characters.`);
+    }
     
     // ============================================
     // BALANCE CHECK (using calculated cost)
     // ============================================
     
-    if (user.smsBalance < smsCost) {
+    if (user.smsBalance < cost) {
       throw { 
         code: 'INSUFFICIENT_BALANCE', 
-        message: `SMS failed - Insufficient balance. Required: $${smsCost.toFixed(2)}, Available: $${user.smsBalance.toFixed(2)}` 
+        message: `Insufficient balance. Required: $${cost.toFixed(2)}, Available: $${user.smsBalance.toFixed(2)}` 
       };
     }
 
@@ -254,17 +255,18 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
     // DEDUCT BALANCE (deduct actual calculated cost)
     // ============================================
     
-    user.smsBalance -= smsCost;
+    user.smsBalance -= cost;
     await user.save();
 
-    console.log(`SMS sent successfully. Balance deducted: $${smsCost.toFixed(2)}, Remaining: $${user.smsBalance.toFixed(2)}`);
+    console.log(`SMS sent successfully. Balance deducted: $${cost.toFixed(2)}, Remaining: $${user.smsBalance.toFixed(2)}`);
 
     return {
-      sid: result.messageId, // Map Cellcast messageId to Twilio-style sid for compatibility
+      sid: result.messageId,
       messageId: result.messageId,
-      characterCount,
+      characterCount: stats.charCount,
       smsCount,
-      cost: smsCost,
+      cost,
+      encoding: stats.encoding,
       remainingBalance: user.smsBalance
     };
 
@@ -342,7 +344,7 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
           );
 
           console.log('SMS sent successfully:', smsResult.messageId);
-          console.log(`Character count: ${smsResult.characterCount}, SMS count: ${smsResult.smsCount}, Cost: $${smsResult.cost.toFixed(2)}`);
+          console.log(`Encoding: ${smsResult.encoding}, Character count: ${smsResult.characterCount}, SMS count: ${smsResult.smsCount}, Cost: $${smsResult.cost.toFixed(2)}`);
           smsStatus = 'sent';
           messageId = smsResult.messageId;
 
@@ -360,7 +362,7 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
             smsStatus = 'Cellcast API key issue';
             console.log('SMS blocked due to API key issue');
           } else if (smsError.message && smsError.message.includes('too long')) {
-            smsStatus = 'Message exceeded 300 character limit';
+            smsStatus = 'Message exceeded character limit';
             console.log('SMS blocked - message too long');
           } else {
             smsStatus = 'failed';
