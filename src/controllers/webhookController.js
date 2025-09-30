@@ -216,22 +216,22 @@ const sendReviewRequestSMS = async (customerPhone, customerName, businessName, g
 
     // ============================================
     // CHARACTER COUNT & COST CALCULATION
-    // Uses Unicode-aware detection from smsCharacterUtils
+    // Uses simplified 155-char pricing from smsCharacterUtils
     // ============================================
     
     const { smsCount, cost, stats } = calculateSMSCost(message);
     
     console.log(`SMS Stats - Encoding: ${stats.encoding}, Chars: ${stats.charCount}, SMS: ${smsCount}, Cost: $${cost.toFixed(2)}`);
     
-    // Warn if Unicode detected (reduces char limit to 70)
+    // Warn if Unicode detected
     if (stats.unicodeDetection.hasUnicode) {
       console.warn('Unicode characters detected in message:', stats.unicodeDetection.unicodeChars);
-      console.warn('Character limit reduced from 160 to 70 per SMS due to Unicode encoding');
+      console.warn('Message contains Unicode characters which may cause delivery issues');
     }
     
-    // Hard limit check (402 for Unicode, 918 for GSM-7)
+    // UPDATED: Hard limit check - 300 characters maximum
     if (!stats.isValid) {
-      throw new Error(`Message too long (${stats.charCount} characters). Maximum for ${stats.encoding}: ${stats.maxLength} characters.`);
+      throw new Error(`Message too long (${stats.charCount} characters). Maximum allowed: ${stats.maxLength} characters.`);
     }
     
     // ============================================

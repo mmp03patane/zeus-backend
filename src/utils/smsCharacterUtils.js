@@ -86,43 +86,29 @@ const replaceUnicodeWithGSM = (message) => {
 const calculateSMSStats = (message) => {
   const unicodeDetection = detectUnicode(message);
   
-  let encoding, charLimit, maxLength;
+  let encoding, maxLength;
   
   if (unicodeDetection.hasUnicode) {
-    // Unicode (UCS-2) encoding
+    // Unicode (UCS-2) encoding detected
     encoding = 'Unicode';
-    charLimit = 70;  // First SMS
-    maxLength = 402; // Cellcast max for Unicode
+    maxLength = 300; // Business limit (Cellcast allows 402, but we cap at 300)
   } else {
     // GSM-7 encoding
     encoding = 'GSM-7';
-    
-    // Count escape characters (they take 2 chars)
-    let escapeCount = 0;
-    for (const char of message) {
-      if (GSM_7BIT_EXTENDED.includes(char)) {
-        escapeCount++;
-      }
-    }
-    
-    const effectiveLength = message.length + escapeCount;
-    charLimit = 160;  // First SMS
-    maxLength = 918;  // Cellcast max for GSM-7
-    
-    // For multi-part, each part is 153 chars
-    if (effectiveLength > 160) {
-      charLimit = 153;
-    }
+    maxLength = 300; // Business limit (Cellcast allows 918, but we cap at 300)
   }
   
   const charCount = message.length;
-  const smsCount = Math.ceil(charCount / charLimit);
+  
+  // SIMPLIFIED PRICING: Every 155 characters = 1 SMS = $0.25
+  const smsCount = Math.ceil(charCount / 155);
+  
   const isValid = charCount <= maxLength;
   
   return {
     encoding,
     charCount,
-    charLimit,
+    charLimit: 155, // Fixed at 155 for pricing purposes
     smsCount,
     isValid,
     maxLength,
@@ -132,15 +118,19 @@ const calculateSMSStats = (message) => {
 
 /**
  * Calculate SMS cost based on message
+ * SIMPLIFIED: Every 155 characters = $0.25 (regardless of actual SMS segmentation)
  * @param {string} message - The SMS message
  * @returns {Object} { smsCount, cost, stats }
  */
 const calculateSMSCost = (message) => {
   const stats = calculateSMSStats(message);
-  const cost = stats.smsCount * 0.25;
+  
+  // Simple calculation: ceil(charCount / 155) * $0.25
+  const smsCount = Math.ceil(stats.charCount / 155);
+  const cost = smsCount * 0.25;
   
   return {
-    smsCount: stats.smsCount,
+    smsCount: smsCount,
     cost: cost,
     stats: stats
   };

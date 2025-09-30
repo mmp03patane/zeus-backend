@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const logger = require('../utils/logger');
-const cellcastService = require('../services/cellcastService'); // Changed from twilioService
+const cellcastService = require('../services/cellcastService');
+const { detectUnicode } = require('../utils/smsCharacterUtils');
 
 // Get user's SMS template (unchanged)
 const getSMSTemplate = async (req, res) => {
@@ -45,10 +46,20 @@ const updateSMSTemplate = async (req, res) => {
       });
     }
 
-    // Check message length (SMS limit is 1600 characters)
-    if (message.length > 1400) { // Leave room for placeholder expansion
+    // UPDATED: Check message length - template limited to 200 characters
+    if (message.length > 200) {
       return res.status(400).json({ 
-        message: 'Message is too long. Please keep it under 1400 characters.' 
+        message: 'Message is too long. Please keep it under 200 characters.' 
+      });
+    }
+
+    // ADDED: Backend Unicode blocking
+    const unicodeCheck = detectUnicode(message);
+    
+    if (unicodeCheck.hasUnicode) {
+      return res.status(400).json({ 
+        message: 'Invalid character detected. Please remove special characters like smart quotes, dashes, or emojis',
+        invalidCharacters: unicodeCheck.unicodeChars
       });
     }
 
@@ -57,7 +68,7 @@ const updateSMSTemplate = async (req, res) => {
       {
         smsTemplate: {
           message: message.trim(),
-          isEnabled: isEnabled !== false, // Default to true if not specified
+          isEnabled: isEnabled !== false,
           updatedAt: new Date()
         }
       },
@@ -163,7 +174,7 @@ const sendTestSMS = async (req, res) => {
     res.json({
       success: true,
       message: 'Test SMS sent successfully!',
-      messageId: result.messageId, // Changed from messageSid to messageId (Cellcast format)
+      messageId: result.messageId,
       phoneNumber: testPhoneNumber,
       remainingBalance: updatedUser.smsBalance.toFixed(2)
     });
