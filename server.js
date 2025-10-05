@@ -37,9 +37,11 @@ app.set('trust proxy', true);
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://zeusapp.co', 'https://www.zeusapp.co']
-    : ['http://localhost:5173'],
+  origin: [
+    'http://localhost:5173',
+    'https://zeusapp.co', 
+    'https://www.zeusapp.co'
+  ],
   credentials: true
 }));
 
