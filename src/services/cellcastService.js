@@ -1,10 +1,14 @@
-
 const axios = require('axios');
 
 class CellcastService {
     constructor() {
         this.apiKey = process.env.CELLCAST_API_KEY;
         this.baseUrl = 'https://cellcast.com.au/api/v3'; // Correct URL from docs
+        
+        // TEMPORARY DEBUG - Remove after testing
+        console.log('🔑 Cellcast API Key (first 50 chars):', this.apiKey?.substring(0, 50));
+        console.log('🔑 API Key length:', this.apiKey?.length);
+        console.log('🔑 API Key exists:', !!this.apiKey);
         
         if (!this.apiKey) {
             throw new Error('CELLCAST_API_KEY is required');
