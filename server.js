@@ -34,7 +34,7 @@ const { refreshXeroToken } = require('./src/services/xeroTokenService');
 const app = express();
 
 // FIXED: Add trust proxy to handle Northflank's proxy headers
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
