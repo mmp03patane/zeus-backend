@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const QRCode = require('../models/QRCode');
-const { authenticate } = require('../middleware/auth');
+const authenticate = require('../middleware/auth');
 
 // ============================================
 // PUBLIC ROUTES (No authentication needed)
