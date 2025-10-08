@@ -36,7 +36,7 @@ router.get('/r/:slug', async (req, res) => {
   }
 });
 
-// Claim page route - Shows the React component
+// Claim page route - Redirect to frontend
 router.get('/claim/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
@@ -52,16 +52,8 @@ router.get('/claim/:slug', async (req, res) => {
       return res.redirect(qrCode.reviewUrl);
     }
     
-    // In production, you'd render your React claim page here
-    // For now, send the slug so frontend knows what to claim
-    res.json({
-      slug,
-      message: 'QR code is available to claim',
-      url: qrCode.url
-    });
-    
-    // OR if you're serving the React app from Express:
-    // res.sendFile(path.join(__dirname, '../../client/build/index.html'));
+    // Redirect to frontend claim page
+    return res.redirect(`https://zeusapp.co/claim/${slug}`);
     
   } catch (error) {
     console.error('Claim page error:', error);
