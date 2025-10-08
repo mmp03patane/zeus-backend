@@ -6,7 +6,8 @@ const searchPlaces = async (query) => {
     const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
       params: {
         query,
-        key: process.env.GOOGLE_API_KEY
+        key: process.env.GOOGLE_API_KEY,
+        region: 'au'  // Bias results to Australia
       }
     });
 
