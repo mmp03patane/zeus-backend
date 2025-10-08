@@ -20,6 +20,7 @@ const googlePlacesRoutes = require('./src/routes/googlePlaces');
 const reviewRequestRoutes = require('./src/routes/reviewRequests');
 const smsRoutes = require('./src/routes/sms');
 const stripeRoutes = require('./src/routes/stripe');
+const qrRoutes = require('./src/routes/qr');
 
 // Import Stripe webhook handler
 const { handleStripeWebhook } = require('./src/controllers/webhookController');
@@ -52,9 +53,9 @@ const limiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting for webhooks
+  // Skip rate limiting for webhooks and QR redirects
   skip: (req) => {
-    return req.path.startsWith('/api/webhook/');
+    return req.path.startsWith('/api/webhook/') || req.path.startsWith('/r/');
   }
 });
 app.use(limiter);
@@ -97,7 +98,14 @@ app.use(passport.session());
 // Connect to database
 connectDatabase();
 
-// Routes - check each one individually
+// QR Code routes (MUST be first at root level for /r/:slug and /claim/:slug to work)
+if (qrRoutes) {
+  app.use('/', qrRoutes);
+} else {
+  console.error('qrRoutes is undefined');
+}
+
+// API Routes - all under /api prefix
 if (authRoutes) {
   app.use('/api/auth', authRoutes);
 } else {
@@ -149,7 +157,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Root route
+// Root route - exact match only, won't conflict with /r/* or /claim/*
 app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Zeus Backend API',
@@ -167,7 +175,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
+// 404 handler - MUST BE LAST
 app.use('*', (req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
