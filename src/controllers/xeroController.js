@@ -58,7 +58,7 @@ const handleXeroCallback = async (req, res) => {
 
     // FIXED: Update frontend URL to dashboard subdomain
     const frontendUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://dashboard.zeusapp.co'  // ✅ Fixed to dashboard subdomain
+      ? 'https://zeusapp.co'  
       : 'http://localhost:5173';
 
     // Handle Xero errors
@@ -139,7 +139,7 @@ const handleXeroCallback = async (req, res) => {
     logger.error('Xero callback error:', error.response?.data || error.message);
     
     const frontendUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://dashboard.zeusapp.co'  // ✅ Fixed to dashboard subdomain
+      ? 'https://zeusapp.co'  
       : 'http://localhost:5173';
 
     res.redirect(`${frontendUrl}/xero/callback?xero=error&message=Connection+failed`);
