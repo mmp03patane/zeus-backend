@@ -711,3 +711,101 @@
 {"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-30T03:00:07.532Z"}
 {"level":"info","message":"SMS template updated for user: 68d232174f095beca3a8a69e","service":"zeus-backend","timestamp":"2025-09-30T03:03:31.642Z"}
 {"level":"info","message":"SMS template updated for user: 68d232174f095beca3a8a69e","service":"zeus-backend","timestamp":"2025-09-30T03:07:36.100Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-30T09:29:49.667Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-30T09:29:50.610Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-30T09:34:50.847Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-30T09:34:51.405Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-30T22:03:27.783Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-30T22:03:34.230Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-09-30T23:41:46.874Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-09-30T23:41:47.410Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T07:12:40.028Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T07:12:40.809Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T07:18:59.507Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T07:18:59.926Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T07:25:57.420Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T07:25:57.888Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T22:29:16.744Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T22:29:17.418Z"}
+{"level":"info","message":"User account deactivated: mmp.patane@gmail.com","service":"zeus-backend","timestamp":"2025-10-01T22:40:15.707Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T23:17:32.011Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T23:17:32.419Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T23:17:41.752Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T23:17:42.154Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-01T23:44:59.592Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-01T23:45:00.038Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T03:53:36.104Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T03:53:38.104Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T05:15:13.760Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T05:15:14.227Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T05:21:35.922Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T05:21:36.422Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T05:36:45.090Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T05:36:45.483Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T08:56:41.680Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T08:56:43.716Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T09:30:03.544Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T09:30:03.974Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-02T22:42:10.650Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-02T22:42:11.978Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-03T05:04:02.962Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T03:03:10.775Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T03:03:13.295Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T03:41:31.165Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T03:41:33.621Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T03:46:19.802Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T03:46:20.265Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T03:58:06.290Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T03:58:06.728Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T21:42:57.023Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T21:43:13.220Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T21:56:19.688Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T21:56:20.095Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T21:56:35.473Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T21:56:35.902Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-05T21:58:12.944Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-05T21:58:13.364Z"}
+{"level":"info","message":"Xero auth initiated for user: 68e1e98f49e28296fd8e56ad","service":"zeus-backend","timestamp":"2025-10-05T23:57:02.005Z"}
+{"level":"info","message":"Xero connection saved successfully for user: 68e1e98f49e28296fd8e56ad","service":"zeus-backend","timestamp":"2025-10-05T23:57:36.461Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-06T01:54:29.614Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-06T01:54:30.185Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-06T04:06:04.383Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-06T04:06:04.905Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-06T04:50:32.667Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-06T04:50:33.085Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-06T22:16:58.966Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-06T22:16:59.499Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-06T22:55:43.068Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-06T22:55:43.479Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-07T03:08:24.431Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-07T03:08:25.239Z"}
+{"level":"info","message":"Xero auth initiated for user: 68e4845cab5a79a7cb29ea2f","service":"zeus-backend","timestamp":"2025-10-07T03:09:29.427Z"}
+{"level":"info","message":"Xero connection saved successfully for user: 68e4845cab5a79a7cb29ea2f","service":"zeus-backend","timestamp":"2025-10-07T03:09:47.083Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-07T04:02:38.084Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-07T04:02:39.436Z"}
+{"level":"info","message":"Xero auth initiated for user: 68e491339bee2ae626e9914a","service":"zeus-backend","timestamp":"2025-10-07T04:04:15.366Z"}
+{"level":"info","message":"Xero connection saved successfully for user: 68e491339bee2ae626e9914a","service":"zeus-backend","timestamp":"2025-10-07T04:04:22.259Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-08T00:05:12.157Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-08T00:05:12.644Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-09T03:09:44.715Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-09T03:09:45.212Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-09T03:10:06.775Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-00.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-09T03:10:07.249Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-10T02:52:36.343Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-10T02:52:36.891Z"}
+{"level":"info","message":"Xero auth initiated for user: 68e8752f81fe3f29e758d8da","service":"zeus-backend","timestamp":"2025-10-10T02:53:53.262Z"}
+{"level":"info","message":"Xero connection saved successfully for user: 68e8752f81fe3f29e758d8da","service":"zeus-backend","timestamp":"2025-10-10T02:54:12.191Z"}
+{"level":"info","message":"SMS template updated for user: 68e8752f81fe3f29e758d8da","service":"zeus-backend","timestamp":"2025-10-10T02:56:21.410Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-10T02:59:47.207Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-02.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-10T02:59:47.627Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-10T03:11:14.072Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-10T03:11:14.481Z"}
+{"level":"info","message":"Xero auth initiated for user: 68e87973ada53e97fdb17d8f","service":"zeus-backend","timestamp":"2025-10-10T03:12:03.556Z"}
+{"level":"info","message":"Xero connection saved successfully for user: 68e87973ada53e97fdb17d8f","service":"zeus-backend","timestamp":"2025-10-10T03:12:09.543Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-10T03:28:47.009Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-10T03:28:47.458Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-12T01:33:28.878Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-12T01:33:29.720Z"}
+{"level":"info","message":"Server running on port 5000","service":"zeus-backend","timestamp":"2025-10-12T02:02:22.704Z"}
+{"level":"info","message":"MongoDB Connected: ac-cjw11n1-shard-00-01.l1gsafm.mongodb.net","service":"zeus-backend","timestamp":"2025-10-12T02:02:23.111Z"}
+{"level":"info","message":"SMS template updated for user: 68e87973ada53e97fdb17d8f","service":"zeus-backend","timestamp":"2025-10-12T02:21:28.406Z"}
