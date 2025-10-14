@@ -16,7 +16,13 @@ const {
 } = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
 const { ensureValidTokens } = require('../middleware/tokenRefresh');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// Choose keys based on environment
+const isProduction = process.env.NODE_ENV === 'production';
+const stripeSecretKey = isProduction 
+  ? process.env.STRIPE_SECRET_KEY_LIVE 
+  : process.env.STRIPE_SECRET_KEY;
+
+const stripe = require('stripe')(stripeSecretKey);
 
 const router = express.Router();
 
