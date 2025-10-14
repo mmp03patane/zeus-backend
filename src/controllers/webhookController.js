@@ -431,7 +431,12 @@ const processInvoiceUpdate = async (user, connection, invoiceId) => {
 const handleStripeWebhook = async (req, res) => {
   try {
     const sig = req.headers['stripe-signature'];
-    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    
+    // Choose webhook secret based on environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const endpointSecret = isProduction 
+      ? process.env.STRIPE_WEBHOOK_SECRET_PROD 
+      : process.env.STRIPE_WEBHOOK_SECRET;
 
     let event;
 
