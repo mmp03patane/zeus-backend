@@ -5,7 +5,14 @@ const ReviewRequest = require('../models/ReviewRequest');
 const { getValidXeroConnection } = require('../services/xeroTokenService');
 const { calculateSMSCost } = require('../utils/smsCharacterUtils');
 const crypto = require('crypto');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Choose keys based on environment
+const isProduction = process.env.NODE_ENV === 'production';
+const stripeSecretKey = isProduction 
+  ? process.env.STRIPE_SECRET_KEY_LIVE 
+  : process.env.STRIPE_SECRET_KEY;
+
+const stripe = require('stripe')(stripeSecretKey);
 
 // In-memory store for processed webhook IDs to prevent duplicates
 const processedWebhooks = new Set();
