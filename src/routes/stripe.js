@@ -2,7 +2,17 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+
+// Choose keys based on environment
+const isProduction = process.env.NODE_ENV === 'production';
+const stripeSecretKey = isProduction 
+  ? process.env.STRIPE_SECRET_KEY_LIVE 
+  : process.env.STRIPE_SECRET_KEY;
+
+const stripe = require('stripe')(stripeSecretKey);
+
+console.log(`🔑 Stripe initialized in ${isProduction ? 'LIVE' : 'TEST'} mode`);
 
 // POST /api/stripe/create-checkout-session
 router.post('/create-checkout-session', authMiddleware, async (req, res) => {
