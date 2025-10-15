@@ -119,7 +119,8 @@ if (xeroRoutes) {
 }
 
 if (webhookRoutes) {
-  app.use('/api/webhooks', webhookRoutes);
+  app.use('/api/webhook', webhookRoutes);   // Xero uses this
+  app.use('/api/webhooks', webhookRoutes);  // Stripe uses this
 } else {
   console.error('webhookRoutes is undefined');
 }
