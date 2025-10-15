@@ -62,15 +62,15 @@ app.use(limiter);
 
 // CRITICAL: Raw body middleware for webhooks MUST come BEFORE json() middleware
 
-// REVERTED: Raw body capture for Xero webhooks - back to working version
+// Raw body capture for Xero webhooks
 app.use('/api/webhook/xero', express.raw({ type: 'application/json' }), (req, res, next) => {
   req.rawBody = req.body.toString('utf8');
   req.body = JSON.parse(req.rawBody);
   next();
 });
 
-// Raw body capture for Stripe webhooks - FIXED: Uncommented and properly configured
-app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+// Raw body capture for Stripe webhooks - preserve raw body for signature verification
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 
 // Body parser middleware (this comes AFTER the raw body handlers)
 app.use(express.json({ limit: '10mb' }));
