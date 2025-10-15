@@ -119,7 +119,7 @@ if (xeroRoutes) {
 }
 
 if (webhookRoutes) {
-  app.use('/api/webhook', webhookRoutes);
+  app.use('/api/webhooks', webhookRoutes);
 } else {
   console.error('webhookRoutes is undefined');
 }
