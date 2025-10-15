@@ -542,49 +542,43 @@ const extractPhoneFromInvoice = (invoice) => {
   return null;
 };
 
-// Helper function to build full phone number from Xero phone components (PRESERVED FROM YOUR CODE)
+// Helper function to build full phone number from Xero phone components
 const buildFullPhoneNumber = (phone) => {
   if (!phone.PhoneNumber) return null;
 
-  let fullNumber = '';
-
-  // Add country code with + prefix
-  if (phone.PhoneCountryCode) {
-    fullNumber += `+${phone.PhoneCountryCode}`;
-  } else {
-    // Default to Australia if no country code
-    fullNumber += '+61';
+  // If we have country code and area code, use the component approach
+  if (phone.PhoneCountryCode && phone.PhoneAreaCode) {
+    let fullNumber = `+${phone.PhoneCountryCode}${phone.PhoneAreaCode}${phone.PhoneNumber}`;
+    console.log(`Built number from components: Country(${phone.PhoneCountryCode}) + Area(${phone.PhoneAreaCode}) + Number(${phone.PhoneNumber}) = ${fullNumber}`);
+    return fullNumber;
   }
 
-  // Add area code
-  if (phone.PhoneAreaCode) {
-    fullNumber += phone.PhoneAreaCode;
-  }
-
-  // Add the main number
-  fullNumber += phone.PhoneNumber;
-
-  console.log(`Built number: Country(${phone.PhoneCountryCode}) + Area(${phone.PhoneAreaCode}) + Number(${phone.PhoneNumber}) = ${fullNumber}`);
-
-  return fullNumber;
+  // Otherwise, treat PhoneNumber as a complete number and format it
+  // This handles cases like "0400803880" or "400803880"
+  const formattedNumber = formatPhoneNumber(phone.PhoneNumber);
+  console.log(`Formatted PhoneNumber field as complete number: ${phone.PhoneNumber} = ${formattedNumber}`);
+  return formattedNumber;
 };
 
-// Helper function to format phone numbers that come as single strings (PRESERVED FROM YOUR CODE)
+// Helper function to format phone numbers that come as single strings
 const formatPhoneNumber = (phoneNumber) => {
   if (!phoneNumber) return null;
 
-  // If already has international prefix, return as-is
-  if (phoneNumber.startsWith('+')) {
-    return phoneNumber;
+  // Remove all non-digit characters for consistency
+  const cleaned = phoneNumber.replace(/\D/g, '');
+
+  // If already has country code (starts with 61), format with +
+  if (cleaned.startsWith('61')) {
+    return `+${cleaned}`;
   }
 
-  // If starts with 0, assume Australian mobile/landline
-  if (phoneNumber.startsWith('0')) {
-    return `+61${phoneNumber.substring(1)}`;
+  // If starts with 0, remove it and add +61 (Australian format)
+  if (cleaned.startsWith('0')) {
+    return `+61${cleaned.substring(1)}`;
   }
 
-  // Otherwise assume it's already in national format, add +61
-  return `+61${phoneNumber}`;
+  // Otherwise assume it's a partial number, add +61
+  return `+61${cleaned}`;
 };
 
 module.exports = {
