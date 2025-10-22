@@ -542,31 +542,63 @@ const extractPhoneFromInvoice = (invoice) => {
   return null;
 };
 
-// Helper function to build full phone number from Xero phone components (PRESERVED FROM YOUR CODE)
+// Helper function to build full phone number from Xero phone components with smart Australian number handling
 const buildFullPhoneNumber = (phone) => {
   if (!phone.PhoneNumber) return null;
 
-  let fullNumber = '';
+  // Remove all spaces, dashes, and parentheses from the phone number
+  let cleanNumber = phone.PhoneNumber.replace(/[\s\-\(\)]/g, '');
 
-  // Add country code with + prefix
-  if (phone.PhoneCountryCode) {
-    fullNumber += `+${phone.PhoneCountryCode}`;
-  } else {
-    // Default to Australia if no country code
-    fullNumber += '+61';
+  // Case 1: Number already starts with + (fully formatted international)
+  if (cleanNumber.startsWith('+')) {
+    console.log(`Already formatted number: ${cleanNumber}`);
+    return cleanNumber;
   }
 
-  // Add area code
-  if (phone.PhoneAreaCode) {
-    fullNumber += phone.PhoneAreaCode;
+  // Case 2: Number starts with 61 (missing + only)
+  if (cleanNumber.startsWith('61')) {
+    const formatted = '+' + cleanNumber;
+    console.log(`Added + to number: ${cleanNumber} -> ${formatted}`);
+    return formatted;
   }
 
-  // Add the main number
-  fullNumber += phone.PhoneNumber;
+  // Case 3: Australian format starting with 0 (like 0400803880)
+  if (cleanNumber.startsWith('0')) {
+    // Remove leading 0 and add +61
+    const formatted = '+61' + cleanNumber.substring(1);
+    console.log(`Converted Australian format: ${cleanNumber} -> ${formatted}`);
+    return formatted;
+  }
 
-  console.log(`Built number: Country(${phone.PhoneCountryCode}) + Area(${phone.PhoneAreaCode}) + Number(${phone.PhoneNumber}) = ${fullNumber}`);
+  // Case 4: Has country and/or area code fields from Xero (original logic)
+  if (phone.PhoneCountryCode || phone.PhoneAreaCode) {
+    let fullNumber = '+';
+    
+    // Add country code (default to 61 for Australia if not provided)
+    fullNumber += phone.PhoneCountryCode || '61';
+    
+    // Add area code if exists
+    if (phone.PhoneAreaCode) {
+      fullNumber += phone.PhoneAreaCode;
+    }
+    
+    // Add the number (remove leading 0 if exists)
+    fullNumber += cleanNumber.startsWith('0') ? cleanNumber.substring(1) : cleanNumber;
+    
+    console.log(`Built from components: Country(${phone.PhoneCountryCode}) + Area(${phone.PhoneAreaCode}) + Number(${phone.PhoneNumber}) = ${fullNumber}`);
+    return fullNumber;
+  }
 
-  return fullNumber;
+  // Case 5: Number without any prefix or code (assume Australian, 9 digits without leading 0)
+  if (cleanNumber.length === 9) {
+    const formatted = '+61' + cleanNumber;
+    console.log(`Assumed Australian number (9 digits): ${cleanNumber} -> ${formatted}`);
+    return formatted;
+  }
+
+  // If we can't determine the format, log and return null
+  console.log(`Could not format phone number: ${phone.PhoneNumber}`);
+  return null;
 };
 
 // Helper function to format phone numbers that come as single strings (PRESERVED FROM YOUR CODE)
